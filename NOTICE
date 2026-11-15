@@ -1,0 +1,18 @@
+LWB Bridge for DSH Tavern 0.1.0-beta.4
+
+Based on LittleWhiteBox by biex
+Copyright 2025 biex
+Original repository: https://github.com/RT15548/LittleWhiteBox
+Source revision: 707e03f2d7f75bb6588b29625b3bd61b6c4a7c5a
+
+The vendored State2 modules have been modified for standalone data execution,
+isolated rule instances, bounded input/output, strict parsing and safe paths.
+Original notices are retained in licenses/ and vendor/.
+
+js-yaml 4.1.0 is included under the MIT license.
+
+This is an independent third-party compatibility preview. It is not an official
+LittleWhiteBox, DSH, or flizzywine DSH Tavern release. No upstream endorsement is implied.
+
+Runtime does not bundle DSH Tavern, SillyTavern, React or DSH. Public upstream
+Tavern modules are referenced only by the separate workspace test suite.

@@ -1,0 +1,10 @@
+node_modules/
+tests/runtime/node_modules/
+tests/.npm-cache/
+tests/.tmp/
+tests/.references/
+tests/.browsers/
+tests/.browser-home/
+tests/layout-output/
+dist/
+.github/workflows/check.yml

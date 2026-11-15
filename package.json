@@ -1,0 +1,16 @@
+{
+  "name": "dsh-tavern-lwb",
+  "version": "0.1.0-beta.4",
+  "description": "LWB Bridge：面向 flizzywine DSH Tavern 的第三方 State2 与便携记忆适配。Based on LittleWhiteBox by biex。",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.mjs", "host", "core", "memory", "vendor", "client.js", "locale", "icon.svg", "README.md", "LICENSE.md", "PROVENANCE.md", "NOTICE", "licenses", "CHANGELOG.md"],
+  "dsh": { "client": { "platform": "web", "inject": ["dsh-tavern-plugin"] } },
+  "scripts": { "test": "node --test tests/core.test.mjs tests/host.test.mjs", "test:all": "node --experimental-loader ./tests/loader.mjs --test tests/*.test.mjs", "check": "node scripts/check.mjs", "pack:zip": "node scripts/pack.mjs", "test:prepare": "node scripts/prepare-test-references.mjs" }
+}

@@ -1,0 +1,6 @@
+# Source stays in Git; installation archives omit development-only files.
+/tests export-ignore
+/scripts export-ignore
+/.github export-ignore
+/.gitignore export-ignore
+/COMMUNITY_POST.md export-ignore
