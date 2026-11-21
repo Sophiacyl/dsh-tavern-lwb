@@ -74,7 +74,7 @@ export function replayNumericPlotLog(base, blocks) {
     const fields = array ? ['typeLock', 'arrayGrow', 'ro'] : boolean ? ['typeLock', 'ro'] : ['typeLock', 'min', 'max', 'step', 'ro'];
     if (Object.keys(rule).some(key => !fields.includes(key)) ||
         (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== (array ? 'array' : typeof leaf)) ||
-        !engine.roots.includes(keys[0]) || (boolean && keys.length < 2) || (!array && !boolean && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值、非根布尔叶和数组的明确规则。');
+        !engine.roots.includes(keys[0]) || (!array && !boolean && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值、布尔值和数组的明确规则。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -112,7 +112,7 @@ export function replayNumericPlotLog(base, blocks) {
         // v1 feeds each list item to putPush, which spreads array items once.
         const incoming = kind === 'push' ? (Array.isArray(value) ? value.flat(1) : [value]) : null;
         const boolean = kind === 'set' && typeof value === 'boolean';
-        if (!path.length || (incoming ? !incoming.length : boolean ? path.length < 2 : !Number.isFinite(value))) fail('仅支持已有数值的set/bump、非根布尔叶的set或已有数组的非空push。');
+        if (!path.length || (incoming ? !incoming.length : !boolean && !Number.isFinite(value))) fail('仅支持已有数值的set/bump、已有布尔值的set或已有数组的非空push。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.41
+
+- Replay plot-log set on existing managed boolean roots. Compare against upstream persisted string values while preserving boolean values and type locks in Bridge snapshots.
+
 ## 0.1.0-beta.40
 
 - Replay plot-log set on existing managed non-root booleans, honoring readonly and preserving boolean type locks. Accept the upstream true/false string spellings without coercing other values or enabling boolean bump.

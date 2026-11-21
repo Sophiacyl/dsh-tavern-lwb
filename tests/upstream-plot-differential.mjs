@@ -261,4 +261,26 @@ for (const [initial, rule, blocks] of booleanCases) {
   const node = upstream.rulesGetTable()[path];
   assert.deepEqual(actual.LWB_RULES_V2, { [path]: { ...(node.ro ? { ro: true } : {}), ...(node.typeLock === 'boolean' ? { typeLock: 'boolean' } : {}) } });
 }
-console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded, ${arrayCases.length} nested and ${rootCases.length} root array push, ${rootNumericCases.length} root numeric, ${booleanCases.length} boolean set upstream comparisons passed`);
+const rootBooleanCases = [
+  [true, {}, [{ set: { 开关: false } }]],
+  [false, {}, [{ set: { 开关: ' true ' } }]],
+  [false, {}, [{ set: { 开关: false } }]],
+  [true, { ro: true }, [{ set: { 开关: false } }]],
+  [true, { typeLock: 'boolean' }, [[{ set: { 开关: false } }, { 记录: { 开关: ' true ' } }], { set: { 开关: false } }]],
+];
+for (const [initial, rule, blocks] of rootBooleanCases) {
+  const existing = Object.keys(rule).length > 0;
+  const base = { variables: { 开关: initial }, roots: ['开关'], LWB_RULES_V2: existing ? { 开关: rule } : {} };
+  const source = sourceFor(blocks);
+  synthetic.reset(source, { 开关: String(initial) });
+  upstream.rulesSetTable(existing ? { 开关: { typeLock: 'unknown', ...rule } } : {});
+  await upstream.applyVariablesForMessage(0);
+  const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
+  const { chatMetadata } = synthetic.getContext();
+  assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
+  assert.equal(typeof actual.variables.开关, 'boolean');
+  assert.equal(String(actual.variables.开关), chatMetadata.variables.开关);
+  const node = upstream.rulesGetTable().开关;
+  assert.deepEqual(actual.LWB_RULES_V2, { 开关: { ...(node.ro ? { ro: true } : {}), ...(node.typeLock === 'boolean' ? { typeLock: 'boolean' } : {}) } });
+}
+console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded, ${arrayCases.length} nested and ${rootCases.length} root array push, ${rootNumericCases.length} root numeric, ${booleanCases.length} boolean leaf set, ${rootBooleanCases.length} boolean root set upstream comparisons passed`);

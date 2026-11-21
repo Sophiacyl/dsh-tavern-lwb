@@ -134,7 +134,16 @@ test('plot-log boolean set keeps the leaf type and honors readonly', () => {
   assert.deepEqual(base.variables.R, { a: true, b: false });
   for (const value of [0, 'TRUE', null, '1']) assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { a: value } } }]), { code: 'LWB_PLOT_SUBSET' });
   assert.throws(() => replayNumericPlotLog(base, [{ bump: { R: { a: 1 } } }]), { code: 'LWB_PLOT_SUBSET' });
-  assert.throws(() => replayNumericPlotLog({ ...base, variables: { R: true }, LWB_RULES_V2: {} }, [{ set: { R: false } }]), { code: 'LWB_PLOT_SUBSET' });
+});
+test('plot-log boolean root set preserves type and existing lock rules across messages', () => {
+  const base = { variables: { R: true }, roots: ['R'], LWB_RULES_V2: {} };
+  const first = replayNumericPlotLog(base, [{ set: { R: ' false ' } }]);
+  assert.deepEqual(first, { ...base, variables: { R: false }, LWB_RULES_V2: { R: { typeLock: 'boolean' } } });
+  assert.equal(replayNumericPlotLog(first, [{ set: { R: true } }]).variables.R, true);
+  const locked = { ...first, LWB_RULES_V2: { R: { ro: true } } };
+  assert.deepEqual(replayNumericPlotLog(locked, [{ set: { R: true } }]), locked);
+  assert.throws(() => replayNumericPlotLog(base, [{ bump: { R: 1 } }]), { code: 'LWB_PLOT_SUBSET' });
+  for (const variables of [{}, { R: 'true' }, { R: 1 }]) assert.throws(() => replayNumericPlotLog({ ...base, variables }, [{ set: { R: false } }]), { code: 'LWB_PLOT_SUBSET' });
 });
 test('plot-log push deduplicates numeric items and requires explicit array growth', () => {
   const base = { variables: { R: { a: [1, 1, 2], n: 10 } }, roots: ['R'], LWB_RULES_V2: {} };
