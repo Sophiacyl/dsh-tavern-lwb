@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.4 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.9 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.4'
+    const VERSION = '0.1.0-beta.9'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
@@ -333,6 +333,9 @@ window.__ModuleLoader__.load({
       const [template, setTemplate] = React.useState('')
       const [from, setFrom] = React.useState('1')
       const [to, setTo] = React.useState('1')
+      const [choiceState, setChoiceState] = React.useState({ scope: '', values: {} })
+      const choiceScope = gameId + ':' + (snapshot?.pendingSummary?.token || '')
+      const mergeChoices = choiceState.scope === choiceScope ? choiceState.values : {}
       const generation = React.useRef(0)
       const session = React.useRef(null)
       const input = React.useRef('')
@@ -514,13 +517,16 @@ window.__ModuleLoader__.load({
       }
       function commitSummary() {
         const selected = session.current?.data?.pendingSummary
-        if (!selected || !window.confirm('确认采用此候选并替换本局记忆？')) return
-        void run('采用候选', async (state, data) => {
+        if (!selected || !window.confirm('确认采用已选增量？未选择的潜在冲突会保留旧记忆。')) return
+        void run('采用增量记忆', async (state, data) => {
           if (data.pendingSummary !== selected || identity(selected) !== identity(data)) throw new Error('候选已过期，请刷新。')
           state.invalidate()
-          await ui.callHost(NAME + '/memory/summary-commit', { gameId, token: selected.token, expectedTextVersion: data.textVersion })
-          if (state.active()) setNotice('已提交采用候选。')
+          await ui.callHost(NAME + '/memory/summary-commit', { gameId, token: selected.token, expectedTextVersion: data.textVersion, choices: mergeChoices })
+          if (state.active()) setNotice('已提交增量记忆。')
         })
+      }
+      function mergeChoice(id, value) {
+        setChoiceState(previous => ({ scope: choiceScope, values: { ...(previous.scope === choiceScope ? previous.values : {}), [id]: value } }))
       }
       function discardSummary() {
         void run('丢弃候选', async (state, data) => {
@@ -531,6 +537,7 @@ window.__ModuleLoader__.load({
       const state = session.current
       const busy = !!(loading || pending || !ready(state, snapshot))
       const candidate = snapshot?.pendingSummary
+      const merge = candidate?.merge
       const valid = !!(preview && preview === previewRef.current && preview.text === text && identity(preview) === identity(snapshot))
       const button = (label, onClick, disabled = busy) => h('button', { type: 'button', style: styles.button, onClick, disabled: !!disabled }, label)
       const details = (title, value) => h('details', { style: styles.box }, h('summary', null, title), h('pre', { style: styles.pre }, json(value)))
@@ -555,7 +562,7 @@ window.__ModuleLoader__.load({
           preview ? h('div', null, details('预览记忆数据', preview.data), details('预览条目计数', preview.counts), details('原有条目计数', preview.previousCounts), details('预览警告', preview.warnings)) : null),
         h('div', { style: styles.box },
           h('h3', { style: styles.heading }, '记忆注入模板'),
-          h('p', { style: styles.muted }, '仅支持 xbgetvar、xbgetvar_yaml、xbgetvar_yaml_idx；只展开本模板，不会展开整张旧卡。'),
+          h('p', { style: styles.muted }, '兼容 xbgetvar、xbgetvar_yaml、xbgetvar_yaml_idx 的简单旧卡路径（点号、下标、括号键、引号键）；只展开本模板，不会展开整张旧卡或执行写入宏。'),
           h('label', null, '记忆宏模板', h('textarea', { style: styles.textarea, value: template, disabled: busy, onChange: event => setTemplate(event.target.value), 'aria-label': '记忆宏模板', spellCheck: false })),
           button('保存记忆模板', () => settings({ macroTemplate: template }))),
         h('div', { style: styles.box },
@@ -563,13 +570,29 @@ window.__ModuleLoader__.load({
           h('div', { role: 'status', 'aria-label': '总结状态', style: styles.box },
             h('strong', null, '总结状态'),
             h('p', { role: ['failed', 'stale'].includes(snapshot?.summaryStatus?.status) ? 'alert' : undefined, style: styles.muted }, summaryMessage(snapshot?.summaryStatus, candidate))),
-          h('p', { style: styles.muted }, '每次最多 20 轮，仅生成候选，采用后才替换记忆。使用本局后台模型额度，可能产生费用；宿主可能附带人物卡、世界书和最近剧情。'),
+          h('p', { style: styles.muted }, '每次最多 20 轮，先生成增量提案供你审核；确认采用已选变更后才更新记忆。使用本局后台模型额度，可能产生费用；宿主可能附带人物卡、世界书和最近剧情。'),
           h('div', { style: styles.row },
             h('label', null, '起始轮', h('input', { type: 'number', min: 1, value: from, disabled: busy, onChange: event => setFrom(event.target.value), 'aria-label': '起始轮' })),
             h('label', null, '结束轮', h('input', { type: 'number', min: 1, value: to, disabled: busy, onChange: event => setTo(event.target.value), 'aria-label': '结束轮' })),
             button('生成记忆候选（使用模型额度）', startSummary, busy || !!candidate || ['queued', 'running'].includes(snapshot?.summaryStatus?.status))),
-          candidate ? h('div', null, details('候选记忆数据', candidate.data), details('候选条目计数', candidate.counts),
-            h('div', { style: styles.row }, button('确认采用候选并替换', commitSummary, busy || identity(candidate) !== identity(snapshot)), button('丢弃候选', discardSummary))) : null),
+          candidate ? h('div', null,
+            h('p', { style: styles.muted }, '这是增量提案。旧记忆未出现在新总结中的条目会自动保留；新事实若与同一人物和类别的旧事实相关，默认不追加，需你明确选择。'),
+            details('模型提交的完整提案', candidate.data),
+            merge ? h('div', { style: styles.box },
+              h('h4', { style: styles.heading }, '新增条目（普通新增默认采用）'),
+              ...(merge.added || []).filter(item => item.selected !== false).map(item => h('label', { key: item.id, style: Object.assign({}, styles.row, { display: 'flex', margin: '6px 0' }) },
+                h('input', { type: 'checkbox', checked: mergeChoices[item.id] !== false && item.selected !== false, onChange: event => mergeChoice(item.id, event.target.checked) }),
+                h('span', null, item.kind + ' · ' + json(item.next))))) : null,
+            merge ? h('div', { style: styles.box },
+              h('h4', { style: styles.heading }, '潜在冲突与变更（默认保留旧项）'),
+              ...(merge.conflicts || []).map(item => h('div', { key: item.id, style: styles.box },
+                h('p', { style: styles.muted }, item.reason === 'related-fact' ? '相关事实：旧记忆与新事实并列，请选择是否追加' : '同一条目的内容变化，请选择保留旧项或替换'),
+                h('pre', { style: styles.pre }, '旧：' + json(item.old) + '\n新：' + json(item.next)),
+                item.reason === 'related-fact'
+                  ? h('label', null, h('input', { type: 'checkbox', checked: mergeChoices[item.id] === 'add', onChange: event => mergeChoice(item.id, event.target.checked ? 'add' : 'keep') }), '追加这条事实')
+                  : h('label', null, h('input', { type: 'checkbox', checked: mergeChoices[item.id] === 'replace', onChange: event => mergeChoice(item.id, event.target.checked ? 'replace' : 'keep') }), '用新内容替换旧项')))) : null,
+            merge ? details('保留的旧条目', merge.retained) : null,
+            h('div', { style: styles.row }, button('确认采用已选增量', commitSummary, busy || identity(candidate) !== identity(snapshot)), button('丢弃候选', discardSummary))) : null),
         snapshot?.limits ? details('记忆限制', snapshot.limits) : null)
     }
 

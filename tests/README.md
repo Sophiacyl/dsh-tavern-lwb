@@ -26,7 +26,7 @@ node --experimental-loader ./tests/loader.mjs --test tests/*.test.mjs
 
 `tests/loader.mjs` 把 `tests/runtime/package.json` 声明的所有测试依赖统一解析到该隔离目录：Cordis 4.1.0、YAML 2.9.1、React/React DOM 19.2.0、jsdom 26.1.0、marked 16.3.0、chevrotain 11.2.0、Playwright 1.58.2；其传递依赖由 lockfile 固定。运行包不依赖此 loader，也不依赖本机 DSH 安装目录。
 
-真实 API 集成测试只导入公开参考源码，提供合成游戏、内存存储和合成模型结果。测试不启动网络 Host、不读取真实 profile，不创建模型请求。持久化测试只在 `tests/.tmp` 写合成 JSON，并在结束时清理自己创建的目录。发布测试检查 `0.1.0-beta.4` ZIP，须先运行 `npm run pack:zip`。
+真实 API 集成测试只导入公开参考源码，提供合成游戏、内存存储和合成模型结果。API 7／8 测试还验证记忆与宏贡献进入 Tavern 正文请求 Frame、核心事实在无关键词命中时保留、相关事实参与检索，以及关闭记忆开关后记忆段落消失。测试不启动网络 Host、不读取真实 profile，不创建模型请求。持久化测试只在 `tests/.tmp` 写合成 JSON，并在结束时清理自己创建的目录。发布测试检查 `0.1.0-beta.9` ZIP，须先运行 `npm run pack:zip`。
 
 手机布局测试需要 Playwright Chromium；首次安装同样是显式命令：
 

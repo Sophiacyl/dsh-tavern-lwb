@@ -7,7 +7,7 @@ import { createStateService } from '../host/service.mjs';
 import { createMemoryService } from '../host/memory-service.mjs';
 import { randomUUID } from 'node:crypto';
 import { apply as applyPlugin } from '../index.mjs';
-const data = name => ({ keywords: [], events: [], characters: { main: [] }, characterAliases: [], arcs: [], facts: [{ 人物名字: name, 种类: '职业', 描述: '医生', 核心事实: true }] });
+const data = name => ({ keywords: [], events: [], characters: { main: [] }, characterAliases: [], arcs: [], facts: [{ 人物名字: name, 种类: '职业', 描述: name === '小雪' ? '是一名医生' : '医生', 核心事实: true }] });
 const pack = name => JSON.stringify({ type: 'LittleWhiteBoxStorySummaryMemory', version: 1, data: data(name) });
 function fixture() {
   const docs = new Map(), configs = new Map(), games = new Map(); let modelCalls = 0, task;
@@ -28,7 +28,7 @@ function fixture() {
   async function previewImport(name = '小雪') { const g = game('a'), p = await memory.preview({ gameId: 'a', text: pack(name), expectedTextVersion: g.textVersion }); await memory.importMemory({ gameId: 'a', token: p.token, expectedTextVersion: g.textVersion }); return p; }
   return { tavern, store, state, memory, docs, configs, game, previewImport,
     show(id, turn, version) { const g = game(id); Object.assign(g, { turn, textVersion: version }); g.keys.set(turn, version); },
-    async runSummary(extra = {}) { return memory.runSummary({ gameId: task.gameId, turn: game(task.gameId).turn, textVersion: game(task.gameId).textVersion, input: task.input, runAgent: async () => { modelCalls++; return { text: JSON.stringify(data('总结人物')) }; }, ...extra }); },
+    async runSummary(extra = {}) { return memory.runSummary({ gameId: task.gameId, turn: game(task.gameId).turn, textVersion: game(task.gameId).textVersion, input: task.input, runAgent: async () => { modelCalls++; const proposed = data('小雪'); proposed.facts[0].描述 = '出身于海港'; return { text: JSON.stringify(proposed) }; }, ...extra }); },
     modelCalls: () => modelCalls, task: () => task };
 }
 
@@ -69,7 +69,7 @@ test('stale preview and concurrent imports reject before memory replacement', as
   assert.equal((await f.memory.read({ gameId: 'a' })).record.data.facts[0].人物名字, '乙');
 });
 
-test('summary requires explicit model confirmation; candidate never replaces memory until confirmed', async () => {
+test('summary requires explicit model confirmation; adoption merges while preserving omitted facts', async () => {
   const f = fixture(); await f.previewImport();
   await assert.rejects(f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1' }), { code: 'LWB_MODEL_CONFIRM' });
   assert.equal(f.task(), undefined);
@@ -77,9 +77,131 @@ test('summary requires explicit model confirmation; candidate never replaces mem
   await f.runSummary(); assert.equal(f.modelCalls(), 1);
   const view = await f.memory.read({ gameId: 'a' });
   assert.equal(view.record.data.facts[0].人物名字, '小雪');
-  assert.equal(view.pendingSummary.data.facts[0].人物名字, '总结人物');
-  await f.memory.commitSummary({ gameId: 'a', token: view.pendingSummary.token, expectedTextVersion: 'v1' });
-  assert.equal((await f.memory.read({ gameId: 'a' })).record.data.facts[0].人物名字, '总结人物');
+  assert.equal(view.pendingSummary.data.facts[0].人物名字, '小雪');
+  const relatedFact = view.pendingSummary.merge.conflicts.find(item => item.reason === 'related-fact');
+  assert.ok(relatedFact, 'existing and proposed facts are surfaced for explicit review');
+  await f.memory.commitSummary({ gameId: 'a', token: view.pendingSummary.token, expectedTextVersion: 'v1', choices: { [relatedFact.id]: 'add' } });
+  const merged = (await f.memory.read({ gameId: 'a' })).record.data;
+  assert.deepEqual(merged.facts.map(item => item.描述), ['是一名医生', '出身于海港']);
+});
+
+test('summary draft survives service restart and is adopted exactly once', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary();
+  const before = await f.memory.read({ gameId: 'a' });
+  assert.ok(f.configs.get('a').memory.summaryDraft);
+  const restarted = createMemoryService(f.tavern, f.store);
+  const restored = await restarted.read({ gameId: 'a' });
+  assert.equal(restored.pendingSummary.token, before.pendingSummary.token);
+  assert.deepEqual(restored.pendingSummary.merge, before.pendingSummary.merge);
+  const choices = { [restored.pendingSummary.merge.conflicts.find(item => item.reason === 'related-fact').id]: 'add' };
+  const result = await restarted.commitSummary({ gameId: 'a', token: restored.pendingSummary.token, expectedTextVersion: 'v1', choices });
+  assert.equal(result.saved, true);
+  assert.equal(f.configs.get('a').memory.summaryDraft, null);
+  assert.equal((await restarted.commitSummary({ gameId: 'a', token: restored.pendingSummary.token, expectedTextVersion: 'v1', choices: {} })).status, 'duplicate');
+  assert.deepEqual((await f.memory.read({ gameId: 'a' })).record.data.facts.map(item => item.描述), ['是一名医生', '出身于海港']);
+});
+
+test('adoption retry after cleanup failure is idempotent', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary();
+  const candidate = (await f.memory.read({ gameId: 'a' })).pendingSummary;
+  const save = f.tavern.saveGameData.bind(f.tavern); let failCleanup = true;
+  f.tavern.saveGameData = async input => {
+    if (failCleanup && input.data.memory?.summaryStatus?.status === 'adopted') { failCleanup = false; throw new Error('synthetic cleanup failure'); }
+    return save(input);
+  };
+  await assert.rejects(f.memory.commitSummary({ gameId: 'a', token: candidate.token, expectedTextVersion: 'v1' }), /synthetic cleanup failure/);
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.data.facts.length, 1);
+  const restarted = createMemoryService(f.tavern, f.store);
+  assert.equal((await restarted.commitSummary({ gameId: 'a', token: candidate.token, expectedTextVersion: 'v1' })).status, 'duplicate');
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.data.facts.length, 1);
+});
+
+test('retrying adopted A after restart preserves newer pending candidate B', async () => {
+  const f = fixture(); await f.previewImport();
+  const start = () => f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await start(); await f.runSummary();
+  const a = (await f.memory.read({ gameId: 'a' })).pendingSummary;
+  await f.memory.commitSummary({ gameId: 'a', token: a.token, expectedTextVersion: 'v1' });
+  await start(); await f.runSummary();
+  const b = (await f.memory.read({ gameId: 'a' })).pendingSummary;
+  const restarted = createMemoryService(f.tavern, f.store);
+  assert.equal((await restarted.commitSummary({ gameId: 'a', token: a.token, expectedTextVersion: 'v1' })).status, 'duplicate');
+  const view = await restarted.read({ gameId: 'a' });
+  assert.equal(view.pendingSummary.token, b.token);
+  assert.equal(view.summaryStatus.status, 'ready');
+});
+
+test('ordinary new additions accept boolean true after deselect and reselect', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary({ runAgent: async () => ({ text: JSON.stringify({ ...data('新人物'), keywords: [{ text: '新线索', weight: '高' }] }) }) });
+  const candidate = (await f.memory.read({ gameId: 'a' })).pendingSummary;
+  const addition = candidate.merge.added.find(item => item.kind === 'keywords');
+  await f.memory.commitSummary({ gameId: 'a', token: candidate.token, expectedTextVersion: 'v1', choices: { [addition.id]: true } });
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.data.keywords[0].text, '新线索');
+});
+
+test('terminal expiry and stale status remain stable across repeated reads', async () => {
+  for (const expired of [true, false]) {
+    const f = fixture(); let clock = 100;
+    const service = createMemoryService(f.tavern, f.store, { now: () => clock });
+    await service.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+    await service.runSummary({ gameId: 'a', turn: 1, textVersion: 'v1', input: f.task().input, runAgent: async () => ({ text: JSON.stringify(data('小雪')) }) });
+    if (expired) clock += 16 * 60 * 1000; else f.show('a', 2, 'v2');
+    for (let i = 0; i < 3; i++) assert.equal((await service.read({ gameId: 'a' })).summaryStatus.status, expired ? 'expired' : 'stale');
+  }
+});
+
+test('persisted summary draft expires and clears on read', async () => {
+  const f = fixture(); await f.previewImport(); let clock = 100;
+  const service = createMemoryService(f.tavern, f.store, { now: () => clock });
+  await service.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await service.runSummary({ gameId: 'a', turn: 1, textVersion: 'v1', input: f.task().input, runAgent: async () => ({ text: JSON.stringify(data('小雪')) }) });
+  const token = (await service.read({ gameId: 'a' })).pendingSummary.token;
+  clock += 16 * 60 * 1000;
+  const restarted = createMemoryService(f.tavern, f.store, { now: () => clock });
+  const expired = await restarted.read({ gameId: 'a' });
+  assert.equal(expired.pendingSummary, null);
+  assert.equal(expired.summaryStatus.status, 'expired');
+  assert.equal(f.configs.get('a').memory.summaryDraft, null);
+  await assert.rejects(restarted.commitSummary({ gameId: 'a', token, expectedTextVersion: 'v1' }), { code: 'LWB_MEMORY_PREVIEW' });
+});
+
+test('persisted candidate becomes stale after the story version changes', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary();
+  f.show('a', 2, 'v2');
+  const restarted = createMemoryService(f.tavern, f.store);
+  const view = await restarted.read({ gameId: 'a' });
+  assert.equal(view.pendingSummary, null);
+  assert.equal(view.summaryStatus.status, 'stale');
+  assert.equal(f.configs.get('a').memory.summaryDraft, null);
+});
+
+test('discarded persisted candidate does not reappear after restart', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary(); const token = (await f.memory.read({ gameId: 'a' })).pendingSummary.token;
+  await f.memory.discardSummary({ gameId: 'a', token });
+  const restarted = createMemoryService(f.tavern, f.store);
+  const restored = await restarted.read({ gameId: 'a' });
+  assert.equal(restored.pendingSummary, null);
+  assert.equal(restored.summaryStatus.status, 'discarded');
+});
+
+test('summary merge rejects when the base memory changes after candidate review', async () => {
+  const f = fixture(); await f.previewImport();
+  await f.memory.summaryStart({ gameId: 'a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true, confirmationId: randomUUID() });
+  await f.runSummary();
+  const candidate = (await f.memory.read({ gameId: 'a' })).pendingSummary;
+  await f.previewImport('后来导入');
+  await assert.rejects(f.memory.commitSummary({ gameId: 'a', token: candidate.token, expectedTextVersion: 'v1' }), { code: 'LWB_MEMORY_CONFLICT' });
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.data.facts[0].人物名字, '后来导入');
 });
 
 test('cancelled, malformed and late summary candidates never change saved memory or retry model', async () => {

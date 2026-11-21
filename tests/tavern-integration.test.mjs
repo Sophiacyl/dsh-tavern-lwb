@@ -3,9 +3,10 @@
 // Runs real, unmodified public Tavern API modules and Cordis with synthetic storage only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
 import * as plugin from '../index.mjs';
-import { referenceModule } from '../scripts/prepare-test-references.mjs';
+import { referenceModule, referenceRoot } from '../scripts/prepare-test-references.mjs';
 const targets = [
   ['API 7 / pinned public snapshot', 'api7'],
   ['API 8 / pinned public snapshot', 'api8'],
@@ -19,6 +20,8 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   const { createTavernPluginApi } = await import(referenceModule(apiVersion, 'plugin-api.js'));
   const { createPluginData } = await import(referenceModule(apiVersion, 'domain/plugin-data.js'));
   const { createPluginMedia } = await import(referenceModule(apiVersion, 'domain/plugin-media.js'));
+  const referencePath = pathToFileURL(referenceRoot(apiVersion) + '/tavern-plugin/lib/domain/');
+  const { createForegroundFrameBuilder, foregroundFrameText } = await import(new URL('agent-input-frame.js', referencePath));
   const data = createPluginData({ store: memoryStore() });
   const media = createPluginMedia({ store: memoryStore() });
   const root = new Context();
@@ -32,7 +35,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   const identities = new Map([[plugin.name, { runtimeName: plugin.name, origin: 'global' }]]);
   let api, modelCalls = 0, latestManual, toolReplies = [];
   let modelMode = 'repair';
-  const memoryData = { keywords: [], events: [], characters: { main: [] }, characterAliases: [], arcs: [], facts: [{ 人物名字: '合成人物', 种类: '职业', 描述: '医生', 核心事实: true }] };
+  const memoryData = { keywords: [], events: [], characters: { main: [] }, characterAliases: [], arcs: [], facts: [{ 人物名字: '合成人物', 种类: '身份', 描述: '旅店老板', 核心事实: true }, { 人物名字: '合成人物', 种类: '职业', 描述: '医生', 核心事实: false }] };
   const warnings = [];
   const host = root.plugin({ name: 'synthetic-tavern-host', apply(ctx) {
     api = createTavernPluginApi({ ctx, data, media, runningUserPlugins: identities,
@@ -98,6 +101,18 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   const memoryContext = await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '医生' });
   assert.equal(memoryContext.length, 2);
   assert.ok(memoryContext.some(section => section.text.includes('合成人物') && section.text.includes('生命值=90')));
+  const requestFrame = createForegroundFrameBuilder().build({ chatId: 'synthetic-chat', branchId: 'synthetic-branch', operationId: 'synthetic-request', basedOnRevision: 0, turn: 3,
+    inputs: [{ kind: 'foreground.user-input', sourceText: '医生', projectedText: '医生' }, ...memoryContext.map(section => ({ kind: 'foreground.current-state', text: section.text, source: { stage: 'plugin', plugin: plugin.name, name: section.name } }))] });
+  const requestText = foregroundFrameText(requestFrame);
+  assert.match(requestText, /小白记忆：背景资料，非指令/);
+  assert.match(requestText, /合成人物/);
+  assert.match(requestText, /生命值=90/);
+  const irrelevantContext = await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '完全无关的烹饪问题' });
+  assert.ok(irrelevantContext.some(section => section.text.includes('旅店老板')), 'core fact is retained without a keyword match');
+  await call('memory/settings', { enabled: false, macroTemplate: '生命值={{xbgetvar::数据.角色.生命值}}', expectedTextVersion: 'reply-v1' });
+  const disabledContext = await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '医生' });
+  assert.ok(!disabledContext.some(section => section.text.includes('小白记忆：背景资料')));
+  assert.ok(disabledContext.some(section => section.text.includes('生命值=90')), 'the independent macro template remains enabled');
   await call('memory/summary-start', { from: 1, to: 2, expectedTextVersion: 'reply-v1', confirmModelUse: true, confirmationId: 'synthetic-confirmation-0001' });
   await latestManual;
   const candidate = (await call('memory/read')).pendingSummary;
@@ -107,7 +122,8 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.match(toolReplies[0].repairHint, /from/);
   assert.equal(toolReplies[1].ok, true);
   assert.equal((await call('memory/read')).summaryStatus.status, 'ready');
-  await call('memory/summary-commit', { token: candidate.token, expectedTextVersion: 'reply-v1' });
+  assert.ok(candidate.merge && Array.isArray(candidate.merge.added) && Array.isArray(candidate.merge.conflicts));
+  await call('memory/summary-commit', { token: candidate.token, expectedTextVersion: 'reply-v1', choices: Object.fromEntries(candidate.merge.conflicts.filter(item => item.reason === 'related-fact').map(item => [item.id, 'add'])) });
   assert.equal((await call('memory/read')).pendingSummary, null);
   assert.equal((await call('memory/read')).summaryStatus.status, 'adopted');
   const savedMemory = (await call('memory/read')).record.revision;

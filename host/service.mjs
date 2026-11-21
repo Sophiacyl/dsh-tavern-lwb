@@ -3,11 +3,12 @@
 // DSH Tavern adapter. Original implementation; state engine derived from LWB by biex.
 import { createHash } from 'node:crypto';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.4';
+export const VERSION = '0.1.0-beta.9';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
 const MAX_PROMPT_CHARS = 7400;
+const MAX_LINEAGE_DEPTH = 10000;
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const clone = value => structuredClone(value);
@@ -43,7 +44,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
     const head = validateRecord(await tavern.readTurnData({ gameId, turn }));
     let row = head, depth = 0;
     while (row) {
-      if (++depth > 128) fail('LWB_LINEAGE_LIMIT', '验证版最多支持 128 份连续状态，请导出后另开测试游戏。');
+      if (++depth > MAX_LINEAGE_DEPTH) fail('LWB_LINEAGE_LIMIT', '状态历史超过 10000 轮读取上限，请导出并分段存档。');
       if (typeof row.stateHash !== 'string' || row.stateHash !== stateHash(row)) fail('LWB_RECORD', '状态记录校验失败，请保留数据并检查。');
       if (row.parent === null) break;
       if (!row.parent || !Number.isSafeInteger(row.parent.turn) || row.parent.turn >= row.turn || row.parent.turn < 1) fail('LWB_RECORD', '状态来源关系无效。');
@@ -79,8 +80,8 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
     });
     return { status: result.status, operationCount: result.operationCount, errors: fields(result.errors), corrections: fields(result.corrections), changes: fields(result.changes) };
   }
-  function recordData(engine, result, sourceKind, sourceDigest, baseline = null) {
-    if (baseline?.lineageDepth >= 128) fail('LWB_LINEAGE_LIMIT', '已到验证版 128 份状态上限，请导出状态后另开测试游戏。');
+  function recordData(engine, result, sourceKind, sourceDigest, baseline = null, turn = null) {
+    if (baseline?.lineageDepth >= MAX_LINEAGE_DEPTH) fail('LWB_LINEAGE_LIMIT', '状态历史达到 10000 轮读取上限，请导出并分段存档。');
     const parent = baseline ? { turn: baseline.turn, stateHash: baseline.stateHash } : null;
     const data = { spec: RECORD_SPEC, version: 1, engine, diagnostics: diagnostics(result), sourceKind, sourceDigest, parent, savedAt: now() };
     data.stateHash = stateHash(data);
@@ -90,7 +91,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
   }
   async function save(gameId, turn, textVersion, engine, result, sourceKind, sourceDigest, signal, baseline = null) {
     live(); signal?.throwIfAborted();
-    const data = recordData(engine, result, sourceKind, sourceDigest, baseline);
+    const data = recordData(engine, result, sourceKind, sourceDigest, baseline, turn);
     const freshParent = await recordAt(gameId, turn - 1);
     if (baseline && (!freshParent || freshParent.turn !== baseline.turn || freshParent.stateHash !== baseline.stateHash)) fail('LWB_PARENT_CHANGED', '前序状态已变化，请重新处理当前轮。');
     live(); signal?.throwIfAborted();

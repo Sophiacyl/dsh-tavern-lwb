@@ -157,12 +157,24 @@ test('YAML and YAML idx preserve nesting/ambiguous scalars and index comment sem
   assert.equal(expandLwbMacros('{{xbgetvar_yaml_idx::人物.空}}', e).text, '[]');
 });
 
+test('legacy quoted-key and whitespace macro paths normalize within the restricted reader', () => {
+  const value = { variables: { A: [{ name: '小雪' }], 人物: { '名字': '旅人' } } };
+  assert.equal(expandLwbMacros('{{ xbgetvar :: A[0].name }}', value).text, '小雪');
+  assert.equal(expandLwbMacros('{{xbgetvar::人物["名字"]}}', value).text, '旅人');
+  assert.equal(expandLwbMacros("{{xbgetvar::人物['名字']}}", value).text, '旅人');
+  assert.equal(expandLwbMacros('{{xbgetvar::人物[名字]}}', value).text, '旅人');
+  for (const path of ['人物[bad key]', '人物[-1]', '人物["bad key"]', '人物["constructor"]']) {
+    const macro = `{{xbgetvar::${path}}}`, result = expandLwbMacros(macro, value);
+    assert.equal(result.text, macro); assert.equal(result.diagnostics.length, 1);
+  }
+});
+
 test('unknown and invalid macros remain with diagnostics; no execution or inherited reads', () => {
   const e = engine();
   const unknown = '{{getglobalvar::secret}} {{xbsetvar::人物.名字::恶意}} {{xbgetvar::人物.名字::default}}';
   const result = expandLwbMacros(unknown, e);
   assert.equal(result.text, unknown); assert.equal(result.diagnostics.length, 3);
-  for (const path of ['人物.__proto__', '人物.constructor.name', '人物.prototype', '人物[-1]', '人物[foo]', '人物["名字"]', '人物..名字', Array(18).fill('x').join('.')]) {
+  for (const path of ['人物.__proto__', '人物.constructor.name', '人物.prototype', '人物[-1]', '人物[bad key]', '人物["bad key"]', '人物..名字', Array(18).fill('x').join('.')]) {
     const text = `{{xbgetvar::${path}}}`;
     const r = expandLwbMacros(text, e);
     assert.equal(r.text, text); assert.equal(r.diagnostics.length, 1);

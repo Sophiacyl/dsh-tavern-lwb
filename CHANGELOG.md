@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.0-beta.9 — 2026-11-21
+
+- Scope merge review choices by game and candidate token; allow reselecting ordinary additions and remove duplicate gated-fact checkboxes.
+- Preserve newer pending candidates when an adopted older token is retried after restart.
+- Keep expired/stale statuses stable across repeated reads and expose same-fact core/trend metadata changes as reviewable conflicts.
+- Strengthen restart adoption tests to assert newly saved content, and exercise long candidate review layouts on mobile Chromium.
+- Correct long-history claims: the 10,000-record internal guard does not override the pinned host's 2,000-record/8 MiB per-game storage limits or full-lineage scan cost.
+
+## 0.1.0-beta.8 — 2026-11-19
+
+- Extend the restricted template reader for common LittleWhiteBox legacy bracket paths such as `人物[名字]`, quoted-key paths such as `人物["名字"]`, and array paths such as `A[0].name`.
+- Trim harmless macro-name/path whitespace while continuing to reject expressions, negative indices, unsafe keys, write macros and global-variable macros.
+- Keep expansion confined to the user's explicit plugin template; do not rewrite cards, world books or presets.
+- Add macro and client regression coverage for the compatibility subset and its rejection boundaries.
+
+## 0.1.0-beta.7 — 2026-11-19
+
+- Persist complete summary candidates and merge previews in per-game plugin settings for up to 15 minutes.
+- Restore pending candidates after page refresh or DSH restart; clear them on expiry, story-version change, base-memory revision change, adoption or discard.
+- Keep adoption idempotent and revision-checked; a candidate cannot overwrite memory edited or imported after generation.
+- Add restart, expiry, stale-version, concurrent-memory-change and duplicate-adoption regression tests.
+
+## 0.1.0-beta.6 — 2026-11-19
+
+- Generate memory proposals against the current portable-memory baseline and show additions, retained entries, and potential conflicts before adoption.
+- Preserve existing entries omitted by a summary; never replace the saved memory with the model proposal.
+- Require explicit per-item selection to add same-character/category facts or replace changed keyed entries; default conflicts keep existing values.
+- Recheck the baseline revision and story version at adoption; stale candidates cannot overwrite intervening imports or edits.
+- Add deterministic merge, host, client and API integration coverage for proposal review and adoption.
+
+## 0.1.0-beta.5 — 2026-11-19
+
+- Remove the former 128-turn hard stop; preserve full parent-chain validation for rollback and backfilled-turn detection.
+- Bound each state lineage at 10,000 records and keep existing state readable/exportable when the limit is reached.
+- Add long-history regression coverage beyond 128 turns and update the documented limits.
+
 ## 0.1.0-beta.4 — 2026-11-15
 
 - Prepare the first public test repository as **LWB Bridge**, keeping the existing package ID and storage formats.

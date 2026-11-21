@@ -66,7 +66,7 @@ test('idle and failed status stay visible; screenshot alias errors render as saf
   assert.ok(s.summary().querySelector('[role="alert"]'));
   assert.equal(s.dom.window.document.querySelector('img,script,svg'), null);
   assert.match(body(s), /保留原有记忆/); assert.equal(s.button(generate).disabled, false);
-  assert.equal(s.button('确认采用候选并替换'), undefined);
+  assert.equal(s.button('确认采用已选增量'), undefined);
 });
 
 for (const value of ['queued', 'running', 'ready']) test(value + ' status explains progress and gates candidate actions', async t => {
@@ -76,7 +76,7 @@ for (const value of ['queued', 'running', 'ready']) test(value + ' status explai
   assert.match(s.summary().textContent, new RegExp('宿主状态 ' + value));
   assert.equal(s.button(generate).disabled, true);
   assert.equal(s.button('刷新记忆').disabled, false);
-  if (ready) { assert.equal(s.button('确认采用候选并替换').disabled, false); assert.equal(s.button('丢弃候选').disabled, false); }
+  if (ready) { assert.equal(s.button('确认采用已选增量').disabled, false); assert.equal(s.button('丢弃候选').disabled, false); }
   else { await s.click(generate); assert.equal(count(s, 'summary-start'), 0); assert.equal(s.confirmations, 0); }
 });
 
@@ -86,7 +86,7 @@ for (const value of ['expired', 'stale']) test(value + ' explains missing candid
   assert.match(s.summary().textContent, value === 'expired' ? /候选已过期/ : /回合或正文版本已变化/);
   assert.ok(s.summary().textContent.includes(message)); assert.match(body(s), /保留原有记忆/);
   assert.equal(!!s.summary().querySelector('[role="alert"]'), value === 'stale');
-  assert.equal(s.button('确认采用候选并替换'), undefined); assert.equal(s.button(generate).disabled, false);
+  assert.equal(s.button('确认采用已选增量'), undefined); assert.equal(s.button(generate).disabled, false);
 });
 
 for (const [value, text] of [['cancelled', '生成已取消'], ['adopted', '候选已采用'], ['discarded', '候选已丢弃']]) test(value + ' terminal status is distinct from idle', async t => {

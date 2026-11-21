@@ -178,16 +178,29 @@ test('initialization preview rejects rules-only input; disposal drains accepted 
   assert.equal(finished, true);
 });
 
-test('state lineage cap refuses next write while existing state remains readable and exportable', async () => {
+test('long state histories continue beyond 128 turns with full parent validation', async () => {
   const f = fixture(); await start(f);
-  for (let turn = 2; turn <= 128; turn++) {
+  for (let turn = 2; turn <= 260; turn++) {
+    f.show('a', turn, 'v' + turn, turn === 129 ? '<state>数据.金币: +1</state>' : '本轮没有变化');
+    await f.service.process({ gameId: 'a', expectedTextVersion: 'v' + turn });
+  }
+  assert.equal((await f.service.read({ gameId: 'a' })).record.turn, 260);
+  assert.equal((await f.service.readEngine('a', 129)).variables.数据.金币, 1);
+  assert.equal((await f.service.readEngine('a', 260)).variables.数据.金币, 1);
+  const finalExport = JSON.parse((await f.service.exportState({ gameId: 'a' })).text);
+  assert.equal(finalExport.engine.variables.数据.金币, 1);
+});
+
+test('editing an earlier long-history parent invalidates its descendant', async () => {
+  const f = fixture(); await start(f);
+  for (let turn = 2; turn <= 130; turn++) {
     f.show('a', turn, 'v' + turn, '本轮没有变化');
     await f.service.process({ gameId: 'a', expectedTextVersion: 'v' + turn });
   }
-  f.show('a', 129, 'v129', '<state>数据.金币: +1</state>');
-  await assert.rejects(f.service.process({ gameId: 'a', expectedTextVersion: 'v129' }), { code: 'LWB_LINEAGE_LIMIT' });
-  assert.equal((await f.service.read({ gameId: 'a' })).record.turn, 128);
-  assert.equal(JSON.parse((await f.service.exportState({ gameId: 'a' })).text).engine.variables.数据.金币, 0);
+  f.show('a', 2, 'v2-edited', '<state>数据.金币: +1</state>');
+  await f.service.process({ gameId: 'a', expectedTextVersion: 'v2-edited' });
+  f.show('a', 130, 'v130');
+  assert.equal((await f.service.read({ gameId: 'a' })).warning.code, 'LWB_PARENT_CHANGED');
 });
 
 test('export is a separate explicit data export, unload cancels queued work', async () => {

@@ -12,10 +12,29 @@ function ownValue(object, key) {
   if (!Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) fail('macro_value', '宏不能读取访问器或隐藏属性');
   return { found: true, value: descriptor.value };
 }
+function normalizeQuotedPath(path) {
+  return path.replace(/\[(["'])([\p{L}\p{N}_-]+)\1\]/gu, (_match, _quote, key) => '.' + key);
+}
+function normalizeLegacyPath(path) {
+  let output = '', index = 0;
+  while (index < path.length) {
+    if (path[index] !== '[') { output += path[index++]; continue; }
+    const end = path.indexOf(']', index + 1);
+    if (end < 0) return path;
+    const inside = path.slice(index + 1, end).trim();
+    if (/^(?:0|[1-9][0-9]*)$/u.test(inside)) output += '[' + inside + ']';
+    else {
+      const match = /^(?:"([A-Za-z0-9_\-\u3400-\u9fff]+)"|'([A-Za-z0-9_\-\u3400-\u9fff]+)'|([A-Za-z_\u3400-\u9fff][A-Za-z0-9_\-\u3400-\u9fff]*))$/u.exec(inside);
+      if (!match) fail('macro_path', '方括号键只支持非负索引或简单对象键');
+      output += '.' + (match[1] || match[2] || match[3]);
+    }
+    index = end + 1;
+  }
+  return output;
+}
 function pathSegments(path) {
   if (!path || path.length > 1000 || path !== path.trim()) fail('macro_path', '宏路径为空或格式不受支持');
-  // Only dotted own keys and nonnegative simple array indices. No expressions,
-  // quoted-key escapes, wildcard expansion or negative index semantics.
+  // Dotted keys and nonnegative indices are supported; quoted keys are normalized below.
   const name = '[^.[\\]\\s\'"\\\\:{}*]+';
   if (!new RegExp(`^${name}(?:(?:\\.${name})|(?:\\[(?:0|[1-9][0-9]*)\\]))*$`, 'u').test(path)) fail('macro_path', '宏路径仅支持点号及简单数组下标');
   const segments = path.replace(/\[(\d+)\]/gu, '.$1').split('.');
@@ -118,7 +137,9 @@ export function expandLwbMacros(template, engine) {
       diagnostics.push({ code: 'macro_unknown', message: `未支持的宏已保留：${name}`, offset: match.index });
     } else {
       try {
-        const path = separator < 0 ? '' : expression.slice(separator + 2).trim();
+        let path = separator < 0 ? '' : expression.slice(separator + 2).trim();
+        if (path.includes('::')) fail('macro_path', '宏路径格式不受支持');
+        path = normalizeLegacyPath(path);
         const resolved = resolve(engine, path);
         if (!resolved.found || resolved.value === undefined) {
           replacement = '';

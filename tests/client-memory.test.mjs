@@ -36,7 +36,7 @@ async function setup(t, overrides = {}) {
       if (method.endsWith('/memory/import')) return { saved: true };
       if (method.endsWith('/memory/settings')) { snapshot.settings = { ...snapshot.settings, ...Object.fromEntries(Object.entries(args).filter(([key]) => ['enabled', 'macroTemplate'].includes(key))) }; return {}; }
       if (method.endsWith('/memory/export')) return { fileName: '../memory.json', text: JSON.stringify(portable) };
-      if (method.endsWith('/memory/summary-start')) { snapshot.pendingSummary = { data: portable, counts: { entries: 4 }, token: 'candidate-token', turn: snapshot.turn, textVersion: snapshot.textVersion }; return {}; }
+      if (method.endsWith('/memory/summary-start')) { snapshot.pendingSummary = { data: portable, counts: { entries: 4 }, merge: { added: [{ id: 'n1', kind: 'keywords', next: { text: '新词' }, selected: true }], conflicts: [], retained: [] }, token: 'candidate-token', turn: snapshot.turn, textVersion: snapshot.textVersion }; return {}; }
       if (method.endsWith('/memory/summary-commit') || method.endsWith('/memory/summary-discard')) { snapshot.pendingSummary = null; return {}; }
       throw new Error('Unexpected ' + method);
     },
@@ -86,23 +86,46 @@ test('manual summary confirms model cost, validates 20 rounds, restores candidat
   s.setConfirm(false); await s.click('生成记忆候选（使用模型额度）'); assert.equal(memoryCalls(s, 'summary-start').length, 0);
   s.setConfirm(true); await s.click('生成记忆候选（使用模型额度）');
   const startedArgs = { ...memoryCalls(s, 'summary-start')[0][1] }; assert.match(startedArgs.confirmationId, /^[a-zA-Z0-9_-]{16,80}$/); delete startedArgs.confirmationId; assert.deepEqual(startedArgs, { gameId: 'game-a', from: 1, to: 1, expectedTextVersion: 'v1', confirmModelUse: true });
-  assert.match(s.dom.window.document.body.textContent, /候选条目计数/);
+  assert.match(s.dom.window.document.body.textContent, /模型提交的完整提案/);
+  assert.match(s.dom.window.document.body.textContent, /旧记忆未出现在新总结中的条目会自动保留/);
   assert.equal(memoryCalls(s, 'summary-commit').length, 0);
-  s.setConfirm(false); await s.click('确认采用候选并替换'); assert.equal(memoryCalls(s, 'summary-commit').length, 0);
-  s.setConfirm(true); await s.click('确认采用候选并替换'); assert.equal(memoryCalls(s, 'summary-commit').length, 1);
+  s.setConfirm(false); await s.click('确认采用已选增量'); assert.equal(memoryCalls(s, 'summary-commit').length, 0);
+  s.setConfirm(true); await s.click('确认采用已选增量'); assert.equal(memoryCalls(s, 'summary-commit').length, 1);
+  assert.equal(JSON.stringify(memoryCalls(s, 'summary-commit')[0][1].choices), '{}');
   s.setSnapshot(memory({ turn: 30, pendingSummary: { data: portable, counts: { entries: 9 }, token: 'restored', turn: 30, textVersion: 'v1' } }));
   await s.update(() => s.turns.at(-1).callback({ turn: 30, textVersion: 'v1', busy: false, settled: true }));
-  assert.match(s.dom.window.document.body.textContent, /候选记忆数据/);
+  assert.match(s.dom.window.document.body.textContent, /模型提交的完整提案/);
   await s.click('丢弃候选'); assert.equal(memoryCalls(s, 'summary-discard').at(-1)[1].token, 'restored');
   await s.change('结束轮', '21'); await s.click('生成记忆候选（使用模型额度）');
   assert.equal(memoryCalls(s, 'summary-start').length, 1); assert.match(s.dom.window.document.body.textContent, /最多 20 轮/);
 });
 
+test('merge choices are scoped to game and candidate token, and additions can be reselected', async t => {
+  const s = await setup(t); await s.click('记忆');
+  const candidate = token => ({ token, turn: 3, textVersion: 'v1', data: portable, merge: {
+    added: [{ id: 'n1', kind: 'keywords', next: { text: '线索' }, selected: true }],
+    conflicts: [{ id: 'c2', kind: 'keywords', reason: 'changed-existing', old: { weight: '低' }, next: { weight: '高' } }], retained: [] } });
+  const show = async token => { s.setSnapshot(memory({ pendingSummary: candidate(token) })); await s.update(() => s.publishes.at(-1).callback({})); };
+  const boxes = () => [...s.dom.window.document.querySelectorAll('input[type=checkbox]')];
+  await show('A');
+  await s.update(() => boxes()[0].click()); assert.equal(boxes()[0].checked, false);
+  await s.update(() => boxes()[0].click()); assert.equal(boxes()[0].checked, true);
+  await s.update(() => boxes()[1].click()); assert.equal(boxes()[1].checked, true);
+  await s.click('确认采用已选增量');
+  assert.equal(memoryCalls(s, 'summary-commit').at(-1)[1].choices.n1, true);
+  assert.equal(memoryCalls(s, 'summary-commit').at(-1)[1].choices.c2, 'replace');
+  await show('B'); assert.equal(boxes()[1].checked, false);
+  await s.update(() => boxes()[1].click());
+  await s.render('game-b'); await s.click('记忆');
+  assert.equal(boxes()[1].checked, false, 'same candidate id in another game has safe defaults');
+});
+
 test('settings and Blob download use host endpoints; busy disables controls and subscriptions clean up', async t => {
   const s = await setup(t); await s.click('记忆'); await s.click('开启记忆');
   assert.equal(memoryCalls(s, 'settings')[0][1].enabled, true);
-  await s.change('记忆宏模板', '{{xbgetvar_yaml_idx::角色}}'); await s.click('保存记忆模板');
-  assert.equal(memoryCalls(s, 'settings').at(-1)[1].macroTemplate, '{{xbgetvar_yaml_idx::角色}}');
+  await s.change('记忆宏模板', '{{xbgetvar_yaml_idx::角色[0][\"姓名\"]}}'); await s.click('保存记忆模板');
+  assert.equal(memoryCalls(s, 'settings').at(-1)[1].macroTemplate, '{{xbgetvar_yaml_idx::角色[0][\"姓名\"]}}');
+  assert.match(s.dom.window.document.body.textContent, /引号键/);
   assert.match(s.dom.window.document.body.textContent, /只展开本模板/);
   await s.click('导出记忆 JSON'); assert.deepEqual(s.downloads, [{ href: 'blob:memory-test', download: '.._memory.json' }]);
   await s.update(() => s.turns.at(-1).callback({ turn: 3, textVersion: 'v1', busy: true, settled: false }));
