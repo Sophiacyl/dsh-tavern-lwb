@@ -107,6 +107,35 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.equal(forkRead.record.engine.variables.数据.角色.生命值, 90);
   assert.equal((await call('process', { gameId: 'synthetic-fork-game', expectedTextVersion: 'fork-reply' })).status, 'duplicate');
   assert.ok((await api.turnContext({ gameId: 'synthetic-fork-game', turn: 3, input: '继续' }))[0].text.includes('90'));
+  const forkArgs = { gameId: 'synthetic-fork-game', expectedTextVersion: 'fork-reply' };
+  const forkBefore = await api.exportGame('synthetic-fork');
+  const numericMigration = JSON.stringify({
+    spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1,
+    baseEngine: { variables: { 数据: { 角色: { 生命值: 100 } } }, roots: ['数据'], LWB_RULES_V2: {} },
+    source: '合成原文<plot-log>{"set":{"数据":{"角色":{"生命值":30}}}}</plot-log><plot-log>{"bump":{"数据":{"角色":{"生命值":"-7"}}}}</plot-log>',
+  });
+  const migrated = await call('migration-preview', { ...forkArgs, text: numericMigration });
+  assert.equal(migrated.engine.variables.数据.角色.生命值, 93);
+  assert.deepEqual(migrated.engine.LWB_RULES_V2, { '数据.角色.生命值': { typeLock: 'number' } });
+  assert.equal(migrated.replacesExisting, true);
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkBefore);
+  await assert.rejects(call('migration-commit', { expectedTextVersion: 'reply-v1', token: migrated.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
+  assert.deepEqual(await api.exportGame('synthetic-chat'), exported, 'fork token cannot write the source game');
+  const confirmArgs = { ...forkArgs, token: migrated.token };
+  await assert.rejects(call('migration-commit', confirmArgs), { code: 'LWB_MIGRATION' });
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkBefore);
+  await call('migration-commit', { ...confirmArgs, confirmReplace: true });
+  assert.equal((await call('process', forkArgs)).status, 'initialized');
+  const migratedRecord = (await call('read', forkArgs)).record;
+  assert.equal(migratedRecord.sourceKind, 'migration');
+  assert.equal(migratedRecord.parent, null);
+  assert.deepEqual(migratedRecord.engine, migrated.engine);
+  const forkAfter = await api.exportGame('synthetic-fork');
+  assert.notDeepEqual(forkAfter, forkBefore);
+  assert.deepEqual(await api.exportGame('synthetic-chat'), exported);
+  await assert.rejects(call('migration-commit', { ...confirmArgs, confirmReplace: true }), { code: 'LWB_MIGRATION' });
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkAfter);
+  assert.equal(modelCalls, 0);
   const previewMemory = await call('memory/preview', { text: JSON.stringify({ type: 'LittleWhiteBoxStorySummaryMemory', version: 1, data: memoryData }), expectedTextVersion: 'reply-v1' });
   await call('memory/import', { token: previewMemory.token, expectedTextVersion: 'reply-v1' });
   await call('memory/settings', { enabled: true, macroTemplate: '生命值={{xbgetvar::数据.角色.生命值}}', expectedTextVersion: 'reply-v1' });
@@ -155,7 +184,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await assert.rejects(call('read'), { code: 'TAVERN_PLUGIN_NOT_FOUND' });
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' })).length, 0);
   assert.ok(warnings.length > 0, 'invalid-only task reaches host error observation');
-  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect')), JSON.stringify(warnings));
+  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect') || message.includes('handle:dsh-tavern-lwb/migration-commit')), JSON.stringify(warnings));
 });
 
 test('Cordis waits for the plugin asynchronous cleanup before unload completes', async t => {
