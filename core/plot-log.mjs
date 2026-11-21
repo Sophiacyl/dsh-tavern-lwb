@@ -59,7 +59,7 @@ export function parseNumericPlotLogSource(source) {
 }
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
-  // Only exact numeric leaves can carry this subset of v1 guards.
+  // Only exact existing targets can carry this subset of v1 guards.
   for (const [path, rule] of Object.entries(engine.LWB_RULES_V2)) {
     const keys = path.split('.');
     let leaf = engine.variables;
@@ -70,10 +70,11 @@ export function replayNumericPlotLog(base, blocks) {
       leaf = leaf[key];
     }
     const array = Array.isArray(leaf);
-    const fields = array ? ['typeLock', 'arrayGrow', 'ro'] : ['typeLock', 'min', 'max', 'step', 'ro'];
+    const boolean = typeof leaf === 'boolean';
+    const fields = array ? ['typeLock', 'arrayGrow', 'ro'] : boolean ? ['typeLock', 'ro'] : ['typeLock', 'min', 'max', 'step', 'ro'];
     if (Object.keys(rule).some(key => !fields.includes(key)) ||
-        (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== (array ? 'array' : 'number')) ||
-        !engine.roots.includes(keys[0]) || (!array && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值叶和标量数组的明确规则。');
+        (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== (array ? 'array' : typeof leaf)) ||
+        !engine.roots.includes(keys[0]) || (boolean && keys.length < 2) || (!array && !boolean && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值、非根布尔叶和数组的明确规则。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -107,16 +108,17 @@ export function replayNumericPlotLog(base, blocks) {
         // decimal notation here, not empty strings, radix prefixes or aliases.
         if (kind === 'bump' && typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(value.trim())) value = Number(value);
         // parseValueForSet also requires valid JSON, excluding leading zeros.
-        if (kind === 'set' && typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value.trim())) value = JSON.parse(value.trim());
+        if (kind === 'set' && typeof value === 'string' && /^(?:true|false|-?(?:0|[1-9]\d*)(?:\.\d+)?)$/u.test(value.trim())) value = JSON.parse(value.trim());
         // v1 feeds each list item to putPush, which spreads array items once.
         const incoming = kind === 'push' ? (Array.isArray(value) ? value.flat(1) : [value]) : null;
-        if (incoming ? path.length < 1 || !incoming.length : path.length < 1 || !Number.isFinite(value)) fail('仅支持已有数值叶的set/bump，或已有数组的非空push。');
+        const boolean = kind === 'set' && typeof value === 'boolean';
+        if (!path.length || (incoming ? !incoming.length : boolean ? path.length < 2 : !Number.isFinite(value))) fail('仅支持已有数值的set/bump、非根布尔叶的set或已有数组的非空push。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');
           current = current[key];
         }
-        if (!engine.roots.includes(path[0]) || (incoming ? !Array.isArray(current) : !Number.isFinite(current))) fail('字段必须属于已托管且匹配操作类型的数值基线。');
+        if (!engine.roots.includes(path[0]) || (incoming ? !Array.isArray(current) : boolean ? typeof current !== 'boolean' : !Number.isFinite(current))) fail('字段必须属于已托管且匹配操作类型的数值基线。');
         count += incoming?.length ?? 1;
         if (count > 128) fail('同一条消息最多128个操作或待追加项。');
         const identity = path.join('.');
@@ -125,7 +127,7 @@ export function replayNumericPlotLog(base, blocks) {
           return;
         }
         const merged = kind === 'set' ? value : (combined.get(identity)?.value ?? 0) + value;
-        if (!Number.isFinite(merged)) fail('plot-log同块增量合计超出有限范围，不采用部分结果。');
+        if (!boolean && !Number.isFinite(merged)) fail('plot-log同块增量合计超出有限范围，不采用部分结果。');
         combined.set(identity, { current, value: merged });
       }
       for (const group of groups.get(kind)) {
@@ -142,6 +144,10 @@ export function replayNumericPlotLog(base, blocks) {
           const next = [...leaf.value];
           for (const item of value) if (!next.includes(item)) next.push(item);
           leaves.set(identity, { value: next, locked: false });
+          continue;
+        }
+        if (kind === 'set' && typeof value === 'boolean') {
+          leaves.set(identity, { value, locked: true });
           continue;
         }
         const clampStep = n => step === undefined ? n : Math.min(step, Math.max(-step, n));
@@ -170,8 +176,8 @@ export function replayNumericPlotLog(base, blocks) {
   // Values already passed v1's guards; State2 must not apply them again.
   const result = applyText({ ...engine, LWB_RULES_V2: {} }, JSON.stringify({ ops }));
   if (!['success', 'noop'].includes(result.status)) fail('plot-log数值转换失败，不采用部分结果。');
-  // Only upstream set installs a lock on an existing numeric leaf.
+  // Upstream set installs a lock on accepted numeric and boolean targets.
   result.engine.LWB_RULES_V2 = engine.LWB_RULES_V2;
-  for (const [path, leaf] of leaves) if (leaf.locked) result.engine.LWB_RULES_V2[path] = { ...engine.LWB_RULES_V2[path], typeLock: 'number' };
+  for (const [path, leaf] of leaves) if (leaf.locked) result.engine.LWB_RULES_V2[path] = { ...engine.LWB_RULES_V2[path], typeLock: typeof leaf.value };
   return validateEngine(result.engine);
 }

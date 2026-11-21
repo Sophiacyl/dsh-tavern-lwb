@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.40
+
+- Replay plot-log set on existing managed non-root booleans, honoring readonly and preserving boolean type locks. Accept the upstream true/false string spellings without coercing other values or enabling boolean bump.
+
 ## 0.1.0-beta.39
 
 - Replay set/bump on existing managed finite numeric roots, with the same readonly, range and step guards. Do not create roots or coerce string-valued baselines.

@@ -125,6 +125,17 @@ test('plot-log readonly numeric leaves skip writes without adding locks', () => 
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { n: 'bad' } } }]), { code: 'LWB_PLOT_SUBSET' });
 });
+test('plot-log boolean set keeps the leaf type and honors readonly', () => {
+  const base = { variables: { R: { a: true, b: false } }, roots: ['R'], LWB_RULES_V2: { 'R.b': { ro: true } } };
+  const result = replayNumericPlotLog(base, [{ set: { R: { a: ' false ', b: true } } }]);
+  assert.deepEqual(result.variables.R, { a: false, b: false });
+  assert.deepEqual(result.LWB_RULES_V2, { 'R.a': { typeLock: 'boolean' }, 'R.b': { ro: true } });
+  assert.deepEqual(replayNumericPlotLog(result, [{ set: { R: { a: true } } }]).variables.R, { a: true, b: false });
+  assert.deepEqual(base.variables.R, { a: true, b: false });
+  for (const value of [0, 'TRUE', null, '1']) assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { a: value } } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog(base, [{ bump: { R: { a: 1 } } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog({ ...base, variables: { R: true }, LWB_RULES_V2: {} }, [{ set: { R: false } }]), { code: 'LWB_PLOT_SUBSET' });
+});
 test('plot-log push deduplicates numeric items and requires explicit array growth', () => {
   const base = { variables: { R: { a: [1, 1, 2], n: 10 } }, roots: ['R'], LWB_RULES_V2: {} };
   const blocks = [[{ push: { R: { a: [2, 3, 3] } } }, { append: { R: { a: 4 } } }], { push: { R: { a: [3, 5] } }, bump: { R: { n: 2 } } }];
