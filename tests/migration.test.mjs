@@ -94,6 +94,20 @@ test('plot-log set only accepts strings that upstream parses as decimal JSON num
   }
   assert.equal(base.variables.数据.金币, 10);
 });
+test('plot-log chains numeric-lock baselines but rejects other or unbound rules', () => {
+  const base = applyText(emptyEngine(), initial + '\n数据.生命: 50').engine;
+  const first = replayNumericPlotLog(base, [{ set: { 数据: { 金币: 20, 生命: 50 } } }]);
+  const blocks = [{ bump: { 数据: { 金币: 2 } } }];
+  const next = replayNumericPlotLog(first, blocks);
+  assert.deepEqual(next.variables.数据, { 金币: 22, 生命: 50 });
+  assert.deepEqual(next.LWB_RULES_V2, first.LWB_RULES_V2);
+  assert.equal(first.variables.数据.金币, 20);
+  for (const LWB_RULES_V2 of [
+    { '数据.金币': { typeLock: 'number', max: 100 } }, { '数据.金币': { typeLock: 'number', ro: false } },
+    { '数据.金币': { typeLock: 'string' } }, { '数据.缺失': { typeLock: 'number' } },
+    { '数据["金币"]': { typeLock: 'number' } }, { 数据: { typeLock: 'number' } },
+  ]) assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2 }, blocks), { code: 'LWB_PLOT_SUBSET' });
+});
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
   for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));

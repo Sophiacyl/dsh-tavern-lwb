@@ -100,4 +100,24 @@ for (const [index, [initial, blocks]] of cases.entries()) {
   const locks = Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([path, rule]) => [path, { typeLock: rule.typeLock }]));
   assert.deepEqual(result.LWB_RULES_V2, locks, `case ${index}: numeric locks`);
 }
-console.log(`plot-log numeric: ${cases.length} upstream executor comparisons passed`);
+const continuation = [
+  [{ ...set(30), ...bump(2) }],
+  [bump(7), bump(3)],
+  [{ set: { 数据: { 深层: { 生命: 55 } } } }, bump(-2)],
+  [bump(' .5 '), { bump: { 数据: { 深层: { 生命: -10 } } } }],
+];
+const sourceFor = blocks => blocks.map(block => `<plot-log>${JSON.stringify(block)}</plot-log>`).join('\n');
+let chain = { variables: { 数据: { 金币: 10, 深层: { 生命: 50 } } }, roots: ['数据'], LWB_RULES_V2: {} };
+synthetic.reset(sourceFor(continuation[0]), { 数据: JSON.stringify(chain.variables.数据) });
+upstream.rulesSetTable({});
+for (const [index, blocks] of continuation.entries()) {
+  const source = sourceFor(blocks);
+  const context = synthetic.getContext();
+  if (index) context.chat.push({ mes: source });
+  await upstream.applyVariablesForMessage(index);
+  assert.ok(context.chatMetadata.LWB_PLOT_APPLIED_KEY?.[index], `message ${index} did not settle`);
+  chain = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: chain, source }));
+  assert.deepEqual(chain.variables.数据, JSON.parse(context.chatMetadata.variables.数据));
+  assert.deepEqual(chain.LWB_RULES_V2, Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([path, rule]) => [path, { typeLock: rule.typeLock }])));
+}
+console.log(`plot-log numeric: ${cases.length} standalone and ${continuation.length} chained upstream executor comparisons passed`);

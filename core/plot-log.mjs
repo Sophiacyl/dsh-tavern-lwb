@@ -58,7 +58,20 @@ export function parseNumericPlotLogSource(source) {
 }
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
-  if (Object.keys(engine.LWB_RULES_V2).length) fail('旧plot-log数值子集不迁移守卫规则；请使用无约束的明确基线。');
+  // A previous migration can leave numeric locks. Those are compatible with
+  // this numeric-only subset; other rules may behave differently in v1.
+  for (const [path, rule] of Object.entries(engine.LWB_RULES_V2)) {
+    const keys = path.split('.');
+    let leaf = engine.variables;
+    for (const key of keys) {
+      if (!/^[\p{L}\p{N}_-]+$/u.test(key) || /^\d/u.test(key) || !plain(leaf) || !Object.hasOwn(leaf, key)) {
+        leaf = undefined; break;
+      }
+      leaf = leaf[key];
+    }
+    if (Object.keys(rule).length !== 1 || rule.typeLock !== 'number' || keys.length < 2 ||
+        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线只接受已有托管数值叶的独立number类型锁，不迁移其他守卫。');
+  }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
   let count = 0;

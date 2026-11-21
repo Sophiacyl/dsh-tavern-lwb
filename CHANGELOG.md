@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.28
+
+- Permit continuation from prior numeric-only `typeLock: number` leaves in explicit plot-log migration chains. Reject other guards and unbound lock paths.
+
 ## 0.1.0-beta.27
 
 - Accept finite decimal strings for numeric plot-log set only when the pinned upstream would parse them as numbers; keep the set and bump string grammars distinct.
