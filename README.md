@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.13`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.14`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
@@ -66,11 +66,11 @@ State页的“状态恢复与历史回放”支持粘贴Bridge v1状态导出包
 
 仅解码`roots`指定的字符串根，不搬入其它宿主变量。规则表必须明确提供，空表表示不迁移约束，不从值推测规则。空根、损坏JSON根、超限值、危险键和不支持规则拒绝；原readonly规则作为快照保留，不通过执行赋值绕过。完整metadata、检查点、脚本不作为导入格式。
 
-也可提供显式消息WAL封装：`{"spec":"dsh-tavern-lwb/upstream-wal","version":1,"records":[{"v":1,"entries":[...]}]}`。records仅含用户选定的一条分支按楼层顺序的State2消息记录（最多100条、128个entry，整个JSON64 KiB）。逐entry保留text/call顺序、roots归属和内部pop语义；指纹只检查格式，不证明原文真实性。不能完整执行的条目整批拒绝，不静默接受partial。原版可保留守卫拒绝请求、未归属text副作用及旧重复数组删除；这些历史边缘记录当前可能被严格拒绝，不称完整无损WAL迁移。每entry最多128操作/128规则，整个封装还受节点、深度和字节限制。结果仍只建立当前轮新基线，不迁移原楼号、swipe候选集合或检查点。
+也可提供显式消息WAL封装：`{"spec":"dsh-tavern-lwb/upstream-wal","version":1,"records":[{"v":1,"entries":[...]}]}`。records仅含用户选定的一条分支按楼层顺序的State2消息记录（最多100条、128个entry，整个JSON64 KiB）。逐entry保留text/call顺序、roots归属和内部pop语义；指纹只检查格式，不证明原文真实性。正常守卫拒绝/操作失败按原版历史语义跳过，预览显示有界错误诊断；未归属text临时效果保留到后续根认领，历史重复数组删除沿用原执行器排序。结构/危险值/容量错误仍整批拒绝。诊断只保留拒绝项，共享16 KiB/32条预算，超出显示省略数量；不称完整无损WAL迁移。每entry最多128操作/128规则，整个封装还受节点、深度和字节限制。结果仍只建立当前轮新基线，不迁移原楼号、swipe候选集合或检查点。
 
 历史回放输入初始化文本和已完成轮次范围（最多100轮、正文总计256 KiB），只处理严格闭合`state`块；任何partial/failed或旧`plot-log`/`varevent`协议都会停止预览，不写数据。确认时重新核对全部原文摘要、正文版本和状态基线；旧轮改变则拒绝。预览15分钟有效，不自动调用模型。
 
-旧版`plot-log`可人工提取严格JSON，使用显式数值子集封装：`{"spec":"dsh-tavern-lwb/plot-log-numeric","version":1,"baseEngine":完整Bridge引擎,"blocks":[{"set":{"数据":{"金币":20}},"bump":{"数据":{"金币":-2}}}]}`。只允许无规则、已托管且已存在的数值叶字段，单个JSON块、每条路径只写一次、键不得以数字开头；set后bump重叠与多块输入会明确拒绝，防止消息前值语义差异。set映射为number类型锁；空对象/no-op也按更窄子集拒绝。固定先set后bump；不自动读取原文标签，不支持别名、宽松JSON/TOML/YAML、字符串增量、push/del/guard或复杂路径。预览确认后仅建立当前基线，不运行旧脚本。
+旧版`plot-log`可人工提取严格JSON，使用显式数值子集封装：`{"spec":"dsh-tavern-lwb/plot-log-numeric","version":1,"baseEngine":完整Bridge引擎,"blocks":[{"set":{"数据":{"生命值":20}},"bump":{"数据":{"金币":-2}}}]}`。只允许无规则、已托管且已存在的数值叶字段，单个JSON块、每条路径只写一次、键不得以数字开头；set后bump重叠与多块输入会明确拒绝，防止消息前值语义差异。set映射为number类型锁；空对象/no-op也按更窄子集拒绝。固定先set后bump；不自动读取原文标签，不支持别名、宽松JSON/TOML/YAML、字符串增量、push/del/guard或复杂路径。预览确认后仅建立当前基线，不运行旧脚本。
 
 **兼容边界**：API7/8没有公开宏注册/原生提示词转换接口，既有卡/世界书/历史的宏无法透明接入；目前仍只处理显式模板。`plot-log`仅支持上述显式数值子集，push去重、根删除与State2不同；`varevent`含JS条件和执行，不做无损自动转换；范围清单见本地第4步兼容报告。
 

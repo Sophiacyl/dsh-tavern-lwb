@@ -3,7 +3,7 @@
 import { validateEngine, emptyEngine, applyText, applyRecordedEntry } from './index.mjs';
 import { replayNumericPlotLog } from './plot-log.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_MIGRATION' }); };
-export function parseStateBackup(text) {
+export function parseStateBackup(text, { onDiagnostics } = {}) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 64 * 1024) fail('状态备份必须为不超过64 KiB的JSON文本。');
   let raw; try { raw = JSON.parse(text); } catch { fail('状态备份JSON格式错误。'); }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('状态备份须为JSON对象。');
@@ -40,10 +40,13 @@ export function parseStateBackup(text) {
       if (!record || record.v !== 1 || !Array.isArray(record.entries) || Object.keys(record).some(key => !['v', 'entries'].includes(key))) fail('WAL消息记录格式无效。');
       for (const entry of record.entries) {
         if (++entries > 128) fail('WAL回放最多128个entry。');
-        engine = applyRecordedEntry(engine, entry);
+        engine = applyRecordedEntry(engine, entry, { onDiagnostics: diagnostics => {
+          if (onDiagnostics) onDiagnostics({ entry: entries, ...diagnostics });
+        } });
       }
     }
     const owned = new Set(engine.roots);
+    for (const root of Object.keys(engine.variables)) if (!owned.has(root)) delete engine.variables[root];
     for (const path of Object.keys(engine.LWB_RULES_V2)) if (!owned.has(path.split(/[.\[]/u)[0])) delete engine.LWB_RULES_V2[path];
     candidate = engine;
   } else fail('仅接受Bridge导出包、显式当前快照或State2消息WAL封装；不接受整个聊天metadata、检查点或脚本。');

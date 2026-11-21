@@ -215,6 +215,29 @@ test('state migration preview is read-only and confirmed restore creates a curre
   assert.equal(restored.engine.variables.数据.金币, 0); assert.equal(restored.parent, null);
   assert.equal((await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' })).status, 'initialized');
 });
+test('WAL diagnostic preview commits without treating entries as story turns', async () => {
+  const f = fixture(); await start(f);
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [{ v: 1, entries: [
+    { kind: 'call', source: 'text', roots: ['数据'], rules: [], blocks: [], ops: [{ op: 'set', path: '数据', value: { 金币: 8 }, source: 'text' }] },
+    { kind: 'call', source: 'text', roots: [], rules: [{ path: '数据.金币', rule: { ro: true } }], blocks: [], ops: [{ op: 'inc', path: '数据.金币', delta: 10, source: 'text' }] }
+  ] }] });
+  const p = await f.service.migrationPreview({ gameId: 'a', text, expectedTextVersion: 'greeting-a' });
+  assert.ok(p.report.some(row => row.errors.length));
+  await f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'greeting-a', confirmReplace: true });
+  assert.equal((await f.service.readEngine('a', 1)).variables.数据.金币, 8);
+});
+
+test('WAL preview diagnostics share a bounded aggregate budget', async () => {
+  const f = fixture(); await start(f);
+  const entries = [{ kind: 'call', source: 'text', roots: ['数据'], rules: [], ops: [{ op: 'set', path: '数据', value: { 金币: 8 }, source: 'text' }] }];
+  for (let i = 0; i < 45; i++) entries.push({ kind: 'call', source: 'json', roots: [], rules: [{ path: '数据.金币', rule: { ro: true } }], ops: [{ op: 'inc', path: '数据.金币', delta: 1, source: 'json' }] });
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [{ v: 1, entries }] });
+  const p = await f.service.migrationPreview({ gameId: 'a', text, expectedTextVersion: 'greeting-a' });
+  assert.ok(Buffer.byteLength(JSON.stringify(p.report)) < 17 * 1024);
+  assert.equal(p.report.at(-1).omittedEntries, 13);
+  assert.equal(p.engine.variables.数据.金币, 8);
+});
+
 test('restore can establish a clean baseline after earlier parent changes', async () => {
   const f = fixture(); await start(f); const backup = await f.service.exportState({ gameId: 'a' });
   f.show('a', 2, 'v2', '<state>数据.金币: +1</state>');

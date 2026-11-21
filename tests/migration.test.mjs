@@ -73,11 +73,27 @@ test('WAL permits text root claim followed by JSON update in one entry', () => {
   assert.equal(engine.variables.数据.金币, 12);
 });
 
-test('WAL rejects missing claims, invalid fingerprints, unknown operations and rejected guards', () => {
+test('WAL rejects malformed structures but reports normal guard refusals without changing values', () => {
   const op = { op: 'set', path: '数据', value: { 金币: 10 }, source: 'text' };
-  for (const invalid of [entry([op], { roots: [] }), entry([op], { blocks: ['bad'] }), entry([{ ...op, op: 'execute' }]), entry([{ ...op, source: 'json' }])]) assert.throws(() => parseStateBackup(wal([{ v: 1, entries: [invalid] }])));
+  for (const invalid of [entry([op], { blocks: ['bad'] }), entry([{ ...op, op: 'execute' }])]) assert.throws(() => parseStateBackup(wal([{ v: 1, entries: [invalid] }])));
   const locked = entry([], { roots: [], rules: [{ path: '数据.金币', rule: { ro: true } }] });
-  assert.throws(() => parseStateBackup(wal([{ v: 1, entries: [entry([op]), locked, entry([{ op: 'inc', path: '数据.金币', delta: 1, source: 'text' }])] }])));
+  const diagnostics = [];
+  const engine = parseStateBackup(wal([{ v: 1, entries: [entry([op]), locked, entry([{ op: 'inc', path: '数据.金币', delta: 1, source: 'text' }])] }]), { onDiagnostics: row => diagnostics.push(row) });
+  assert.equal(engine.variables.数据.金币, 10);
+  assert.ok(diagnostics.some(row => row.errors.length));
+});
+test('WAL retains temporary effects until later root claims and omits never-claimed roots', () => {
+  const engine = parseStateBackup(wal([{ v: 1, entries: [
+    entry([{ op: 'set', path: '数据', value: { 背包: ['先前'] }, source: 'text' }, { op: 'set', path: '临时', value: 99, source: 'text' }], { roots: [] }),
+    entry([{ op: 'push', path: '数据.背包', value: '后来', source: 'text' }])
+  ] }]));
+  assert.deepEqual(engine.variables.数据.背包, ['先前', '后来']);
+  assert.equal(Object.hasOwn(engine.variables, '临时'), false);
+});
+test('stored WAL keeps historical duplicate array deletion ordering', () => {
+  const engine = parseStateBackup(wal([{ v: 1, entries: [entry([{ op: 'set', path: '数据', value: { 背包: ['a', 'b', 'c'] }, source: 'text' }]),
+    entry([{ op: 'del', path: '数据.背包.0', source: 'json' }, { op: 'del', path: '数据.背包[0]', source: 'json' }], { roots: [] })] }]));
+  assert.deepEqual(engine.variables.数据.背包, ['c']);
 });
 
 test('bounded history replay applies strict state blocks without changing source materials', () => {

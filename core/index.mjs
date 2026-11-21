@@ -110,7 +110,7 @@ export function emptyEngine() { return { variables: {}, LWB_RULES_V2: {}, roots:
 export function validateEngine(input) { return checkEngine(input); }
 
 // Replay an explicitly scoped upstream WAL entry through the same bounded executor.
-export function applyRecordedEntry(input, entry) {
+export function applyRecordedEntry(input, entry, { onDiagnostics } = {}) {
   const original = checkEngine(input), value = snapshot(entry);
   if (!plain(value)) fail('invalid_record', 'WAL条目结构无效');
   if (value.rules === undefined) value.rules = [];
@@ -131,18 +131,19 @@ export function applyRecordedEntry(input, entry) {
     if (!plain(op) || !['text', 'json'].includes(op.source) || !['set', 'inc', 'push', 'pop', 'del'].includes(op.op)) fail('invalid_record', 'WAL操作或来源无效');
     const allowed = ['path', 'op', 'source', ...(op.op === 'inc' ? ['delta'] : op.op === 'del' ? [] : ['value'])];
     if (Object.keys(op).some(key => !allowed.includes(key)) || (op.op !== 'del' && !Object.hasOwn(op, op.op === 'inc' ? 'delta' : 'value'))) fail('invalid_record', 'WAL操作字段无效');
-    const root = String(checkPath(op.path)[0]);
-    if (!claims.has(root) && !original.roots.includes(root)) fail('invalid_record', 'WAL操作未声明托管根，不能无损迁移');
+    checkPath(op.path);
     if (op.op === 'inc' && (typeof op.delta !== 'number' || !Number.isFinite(op.delta))) fail('invalid_delta', 'WAL增量无效');
   }
-  validateJsonBatch(value.ops);
+  // Stored requests already passed intake: preserve executor's historical delete ordering.
   const next = checkEngine(original), owned = new Set(next.roots);
   const result = executeStateOperations(next, value.rules, value.ops, { memory: true, report: true, ownedRoots: owned, claimRoots: claims,
     validatePayload: item => snapshot(item), boundary() {
       for (const root of Object.keys(next.variables)) if (next.variables[root] === undefined) delete next.variables[root];
       next.roots = [...owned]; checkEngine(next);
     } });
-  if (result.errors.length) fail('invalid_record', 'WAL包含无法完整执行的操作，不迁移部分结果');
+  // Normal guard refusals/operation failures are historical no-effects, as in upstream rebuild.
+  // Structural, payload and boundary errors above still throw and abort the entire import.
+  if (onDiagnostics) onDiagnostics(compactDiagnostics(result));
   for (const root of claims) owned.add(root);
   next.roots = [...owned];
   return checkEngine(next);

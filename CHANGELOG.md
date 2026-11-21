@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-beta.14 — 2026-11-21
+
+- Replay normal historical guard refusals and operation failures as no-effects, while keeping structural, payload and capacity violations fatal.
+- Preserve temporary state until later root claims and retain historical duplicate-array-delete executor ordering.
+- Include bounded refusal diagnostics in migration previews; do not confuse WAL entry reports with live story version checks on confirmation.
+- Bound aggregate WAL diagnostic output at 16 KiB/32 entries and report omitted entries.
+
 ## 0.1.0-beta.13 — 2026-11-21
 
 - Reject sparse arrays and oversized containers before numeric plot-log traversal; add cyclic/sparse direct-input regression checks.
