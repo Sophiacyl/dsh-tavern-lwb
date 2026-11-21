@@ -227,6 +227,17 @@ test('WAL diagnostic preview commits without treating entries as story turns', a
   assert.equal((await f.service.readEngine('a', 1)).variables.数据.金币, 8);
 });
 
+test('selected swipe mapping is visible before confirmation and does not query source floors', async () => {
+  const f = fixture(); await start(f);
+  const record = amount => ({ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: amount }, source: 'text' }] }] });
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 99, selected: 1, records: [record(999), record(3)] }] });
+  const p = await f.service.migrationPreview({ gameId: 'a', text, expectedTextVersion: 'greeting-a' });
+  assert.deepEqual(p.report.at(-1).selectedBranch, [{ floor: 99, selected: 1 }]);
+  f.tavern.getTurn = () => { throw Error('source floor must not be queried in target game'); };
+  await f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'greeting-a', confirmReplace: true });
+  assert.equal((await f.service.readEngine('a', 1)).variables.数据.金币, 3);
+});
+
 test('WAL preview diagnostics share a bounded aggregate budget', async () => {
   const f = fixture(); await start(f);
   const entries = [{ kind: 'call', source: 'text', roots: ['数据'], rules: [], ops: [{ op: 'set', path: '数据', value: { 金币: 8 }, source: 'text' }] }];
@@ -234,7 +245,7 @@ test('WAL preview diagnostics share a bounded aggregate budget', async () => {
   const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [{ v: 1, entries }] });
   const p = await f.service.migrationPreview({ gameId: 'a', text, expectedTextVersion: 'greeting-a' });
   assert.ok(Buffer.byteLength(JSON.stringify(p.report)) < 17 * 1024);
-  assert.equal(p.report.at(-1).omittedEntries, 13);
+  assert.equal(p.report.at(-1).omittedEntries, 15);
   assert.equal(p.engine.variables.数据.金币, 8);
 });
 

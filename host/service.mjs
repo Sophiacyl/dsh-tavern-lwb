@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.14';
+export const VERSION = '0.1.0-beta.15';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -240,12 +240,12 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
       let engine, report = [];
       if (mode === 'backup') {
         let reportBytes = 0, omitted = 0;
-        engine = parseStateBackup(text, { onDiagnostics: row => {
+        engine = parseStateBackup(text, { onSelection: rows => report.push({ selectedBranch: rows, message: '只恢复所选路径到当前基线，不重建原楼层或其它候选。' }), onDiagnostics: row => {
           // One shared budget across all WAL entries; prioritize refusal diagnostics.
           const compact = { entry: row.entry, errors: row.errors, corrections: [], changes: [] };
           if (!row.errors.length) return;
           const size = Buffer.byteLength(JSON.stringify(compact));
-          if (report.length >= 32 || reportBytes + size > 16 * 1024) { omitted++; return; }
+          if (report.length >= 30 || reportBytes + size > 10 * 1024) { omitted++; return; }
           report.push(compact); reportBytes += size;
         } });
         if (omitted) report.push({ omittedEntries: omitted, message: '迁移诊断达到共享预算，已省略其余条目；状态结果仍完整计算。' });

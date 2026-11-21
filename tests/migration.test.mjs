@@ -65,6 +65,16 @@ test('WAL preserves rules until a later entry claims their root', () => {
   assert.equal(engine.variables.数据.金币, 5);
 });
 
+test('explicit swipe selection replays only the selected path and reports its mapping', () => {
+  const make = amount => ({ v: 1, entries: [entry([{ op: 'set', path: '数据', value: { 金币: amount }, source: 'text' }])] });
+  const floors = [{ floor: 0, selected: 1, records: [make(999), make(10)] }, { floor: 2, selected: 0, records: [{ v: 1, entries: [entry([{ op: 'inc', path: '数据.金币', delta: 2, source: 'json' }], { roots: [] })] }, make(888)] }];
+  let selection;
+  const engine = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors }), { onSelection: rows => { selection = rows; } });
+  assert.equal(engine.variables.数据.金币, 12);
+  assert.deepEqual(selection, [{ floor: 0, selected: 1 }, { floor: 2, selected: 0 }]);
+  for (const invalid of [[], [{ floor: 0, selected: 2, records: [make(1)] }], [{ floor: 0, selected: 0, records: [null] }], [floors[1], floors[0]], [floors[0], floors[0]]]) assert.throws(() => parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: invalid })));
+});
+
 test('WAL permits text root claim followed by JSON update in one entry', () => {
   const engine = parseStateBackup(wal([{ v: 1, entries: [entry([
     { op: 'set', path: '数据', value: { 金币: 10 }, source: 'text' },

@@ -3,10 +3,25 @@
 import { validateEngine, emptyEngine, applyText, applyRecordedEntry } from './index.mjs';
 import { replayNumericPlotLog } from './plot-log.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_MIGRATION' }); };
-export function parseStateBackup(text, { onDiagnostics } = {}) {
+export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 64 * 1024) fail('状态备份必须为不超过64 KiB的JSON文本。');
   let raw; try { raw = JSON.parse(text); } catch { fail('状态备份JSON格式错误。'); }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('状态备份须为JSON对象。');
+  const branchMap = [];
+  if (raw.spec === 'dsh-tavern-lwb/upstream-swipes' && raw.version === 1) {
+    if (!Array.isArray(raw.floors) || !raw.floors.length || raw.floors.length > 100) fail('分支迁移需要1至100个明确排序的楼层。');
+    const records = []; let previous = -1, candidates = 0;
+    for (const row of raw.floors) {
+      if (!row || typeof row !== 'object' || Object.keys(row).some(key => !['floor', 'selected', 'records'].includes(key)) || !Number.isSafeInteger(row.floor) || row.floor < 0 || row.floor <= previous) fail('楼层必须为递增非负整数，不能重复或自动重排。');
+      if (!Array.isArray(row.records) || !row.records.length || (candidates += row.records.length) > 200 || !Number.isSafeInteger(row.selected) || row.selected < 0 || row.selected >= row.records.length || !Object.hasOwn(row.records, row.selected)) fail('每层须明确选择存在的候选，不能回退到其它候选。');
+      previous = row.floor;
+      const record = row.records[row.selected];
+      if (record === null) fail('选中候选缺少状态记录，不能推断为无变化；请明确提供空entries。');
+      records.push(record);
+      branchMap.push({ floor: row.floor, selected: row.selected });
+    }
+    raw = { spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records };
+  }
   let candidate;
   if (raw.spec === 'dsh-tavern-lwb/export' && raw.version === 1 && raw.engine) {
     if (raw.warning) fail('备份带有失效警告，不能自动恢复；请先核查来源。');
@@ -52,6 +67,7 @@ export function parseStateBackup(text, { onDiagnostics } = {}) {
   } else fail('仅接受Bridge导出包、显式当前快照或State2消息WAL封装；不接受整个聊天metadata、检查点或脚本。');
   const engine = validateEngine(candidate);
   if (!engine.roots.length || !Object.keys(engine.variables).length) fail('状态备份没有可恢复的变量。');
+  if (branchMap.length && onSelection) onSelection(branchMap);
   return engine;
 }
 export function replayStateHistory(initialText, materials) {

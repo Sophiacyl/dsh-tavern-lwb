@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.15 — 2026-11-21
+
+- Add an explicit per-floor swipe-record selection envelope with strict ordering and selection checks; show the selected path before confirming baseline restoration.
+- Replay only chosen records, reject missing selected records instead of falling back, and keep source floor identities separate from target-game history.
+- This imports one selected path's final state, not every original branch or chat message.
+
 ## 0.1.0-beta.14 — 2026-11-21
 
 - Replay normal historical guard refusals and operation failures as no-effects, while keeping structural, payload and capacity violations fatal.
