@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.44
+
+- Add read-only history target mapping via migration-preview. Check explicit source floors against existing target turns and their current text versions without issuing a write token.
+
 ## 0.1.0-beta.43
 
 - Bind migration preview to the exact current turn as well as version; reject wrong-turn or missing raw history material with a stale error before confirmation writes.

@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.43';
+export const VERSION = '0.1.0-beta.44';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -231,10 +231,38 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
     try { await recordAt(gameId, state.turn); } catch (error) { warning = { code: error.code || 'LWB_RECORD', message: error.message }; }
     return { fileName: 'lwb-state-export.json', text: JSON.stringify({ spec: 'dsh-tavern-lwb/export', version: 1, pluginVersion: VERSION, turn: raw.turn, engine: raw.engine, ...(warning ? { warning } : {}) }, null, 2) };
   }
-  async function migrationPreview({ gameId, expectedTextVersion, mode = 'backup', text, initialText, from, to } = {}) {
+  async function migrationPreview({ gameId, expectedTextVersion, mode = 'backup', text, initialText, from, to, targets } = {}) {
     return serial(gameId, async () => {
       const state = await current(gameId, expectedTextVersion);
       if (!(await settings(gameId)).enabled) fail('LWB_DISABLED', '请先开启本局状态。');
+      if (mode === 'history-target-plan') {
+        if (!Array.isArray(targets) || !targets.length || targets.length > 100 || typeof text !== 'string') fail('LWB_MIGRATION', '需提供来源封装和1至100个显式目标轮。');
+        let previous = -1, previousTurn = 0;
+        const mapping = Array.from(targets, item => {
+          if (!item || typeof item !== 'object' || Array.isArray(item) ||
+              Object.keys(item).some(key => !['floor', 'turn', 'textVersion'].includes(key)) ||
+              !Number.isSafeInteger(item.floor) || item.floor <= previous ||
+              !Number.isSafeInteger(item.turn) || item.turn <= previousTurn || item.turn > state.turn ||
+              typeof item.textVersion !== 'string' || !item.textVersion || item.textVersion.length > 512) fail('LWB_MIGRATION', '来源楼层和目标轮须严格递增，且明确指定现有正文版本。');
+          previous = item.floor; previousTurn = item.turn;
+          return { floor: item.floor, turn: item.turn, textVersion: item.textVersion };
+        });
+        let selected = [];
+        const engine = parseStateBackup(text, { onSelection: rows => { selected = rows; } });
+        if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
+        const rows = [];
+        for (const [index, target] of mapping.entries()) {
+          const material = await tavern.getTurn({ gameId, turn: target.turn }); live();
+          if (!material || material.turn !== target.turn || material.textVersion !== target.textVersion || typeof material.rawText !== 'string') fail('LWB_STALE', '目标正文不存在或版本已变化，请重新规划。');
+          const row = await tavern.readTurnData({ gameId, turn: target.turn }); live();
+          if (row && (row.turn > target.turn || (row.turn === target.turn && row.textVersion !== target.textVersion))) fail('LWB_STALE', '目标状态记录与当前正文不一致。');
+          rows.push({ ...target, selected: selected[index].selected, hasExactState: row?.turn === target.turn });
+        }
+        const fresh = await current(gameId, expectedTextVersion);
+        if (fresh.turn !== state.turn) fail('LWB_STALE', '规划期间当前轮已变化。');
+        return { mode: 'history-target-plan', report: rows, engine, turn: state.turn, textVersion: state.textVersion,
+          writable: false, message: '仅核对现有目标正文及插件状态，不建立回填计划令牌，不写入任何轮。' };
+      }
       const oldRow = await tavern.readTurnData({ gameId, turn: state.turn });
       const old = oldRow ? { stateHash: digest(JSON.stringify(oldRow)) } : null;
       let engine, report = [];

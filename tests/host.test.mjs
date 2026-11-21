@@ -255,6 +255,31 @@ test('selected swipe mapping is visible before confirmation and does not query s
   assert.equal((await f.service.readEngine('a', 1)).variables.数据.金币, 3);
 });
 
+test('history target plan distinguishes exact state from fallback and cannot be committed', async () => {
+  const f = fixture(); await start(f);
+  f.show('a', 2, 'v2', '合成目标正文');
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [
+    { floor: 5, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 3 }, source: 'text' }] }] }] },
+    { floor: 8, selected: 1, records: [null, { v: 1, entries: [] }] },
+  ] });
+  const targets = [{ floor: 5, turn: 1, textVersion: 'greeting-a' }, { floor: 8, turn: 2, textVersion: 'v2' }];
+  const args = { gameId: 'a', expectedTextVersion: 'v2', mode: 'history-target-plan', text, targets };
+  const before = structuredClone(f.documents);
+  const plan = await f.service.migrationPreview(args);
+  assert.equal(plan.writable, false);
+  assert.equal(Object.hasOwn(plan, 'token'), false);
+  assert.deepEqual(plan.report, [{ ...targets[0], selected: 0, hasExactState: true }, { ...targets[1], selected: 1, hasExactState: false }]);
+  assert.equal(plan.engine.variables.数据.金币, 3);
+  await assert.rejects(f.service.migrationCommit({ ...args, token: plan.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
+  for (const bad of [[targets[1], targets[0]], targets.slice(1), [targets[0], { ...targets[1], floor: 9 }], [targets[0], { ...targets[1], turn: 1 }]]) {
+    await assert.rejects(f.service.migrationPreview({ ...args, targets: bad }), { code: 'LWB_MIGRATION' });
+  }
+  await assert.rejects(f.service.migrationPreview({ ...args, targets: [targets[0], { ...targets[1], textVersion: 'hidden' }] }), { code: 'LWB_STALE' });
+  f.game('a').versions.delete(1);
+  await assert.rejects(f.service.migrationPreview(args), { code: 'LWB_STALE' });
+  assert.deepEqual(f.documents, before);
+});
+
 test('WAL preview diagnostics share a bounded aggregate budget', async () => {
   const f = fixture(); await start(f);
   const entries = [{ kind: 'call', source: 'text', roots: ['数据'], rules: [], ops: [{ op: 'set', path: '数据', value: { 金币: 8 }, source: 'text' }] }];

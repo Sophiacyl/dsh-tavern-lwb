@@ -109,6 +109,14 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.ok((await api.turnContext({ gameId: 'synthetic-fork-game', turn: 3, input: '继续' }))[0].text.includes('90'));
   const forkArgs = { gameId: 'synthetic-fork-game', expectedTextVersion: 'fork-reply' };
   const forkBefore = await api.exportGame('synthetic-fork');
+  const mapping = await call('migration-preview', { ...forkArgs, mode: 'history-target-plan',
+    text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 9, selected: 1, records: [null, { v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 2 }, source: 'text' }] }] }] }] }),
+    targets: [{ floor: 9, turn: 1, textVersion: 'fork-greeting' }],
+  });
+  assert.deepEqual(mapping.report, [{ floor: 9, selected: 1, turn: 1, textVersion: 'fork-greeting', hasExactState: true }]);
+  assert.equal(mapping.writable, false);
+  assert.equal(Object.hasOwn(mapping, 'token'), false);
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkBefore);
   const numericMigration = JSON.stringify({
     spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1,
     baseEngine: { variables: { 数据: { 角色: { 生命值: 100 } } }, roots: ['数据'], LWB_RULES_V2: {} },
