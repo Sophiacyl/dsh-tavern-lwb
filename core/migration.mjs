@@ -3,6 +3,14 @@
 import { validateEngine, emptyEngine, applyText, applyRecordedEntry } from './index.mjs';
 import { replayNumericPlotLog, parseNumericPlotLogSource } from './plot-log.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_MIGRATION' }); };
+const plotInputs = ['source', 'blocks'];
+function replayPlotMessage(engine, input, envelope = false) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).some(key => !plotInputs.includes(key) && !(envelope && ['spec', 'version', 'baseEngine'].includes(key)))) fail('数值plot-log消息仅接受source或blocks。');
+  const hasSource = Object.hasOwn(input, 'source');
+  if (hasSource === Object.hasOwn(input, 'blocks')) fail('数值plot-log消息须明确提供source或blocks之一。');
+  return replayNumericPlotLog(engine, hasSource ? parseNumericPlotLogSource(input.source) : input.blocks);
+}
 export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 64 * 1024) fail('状态备份必须为不超过64 KiB的JSON文本。');
   let raw; try { raw = JSON.parse(text); } catch { fail('状态备份JSON格式错误。'); }
@@ -95,10 +103,11 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
     if (!raw.LWB_RULES_V2 || typeof raw.LWB_RULES_V2 !== 'object' || Array.isArray(raw.LWB_RULES_V2)) fail('上游快照缺少明确规则表；不从值推断约束。');
     candidate = { variables, roots: raw.roots, LWB_RULES_V2: raw.LWB_RULES_V2 };
   } else if (raw.spec === 'dsh-tavern-lwb/plot-log-numeric' && raw.version === 1) {
-    const hasSource = Object.hasOwn(raw, 'source');
-    const hasBlocks = Object.hasOwn(raw, 'blocks');
-    if (hasSource === hasBlocks || Object.keys(raw).some(key => !['spec', 'version', 'baseEngine', 'blocks', 'source'].includes(key))) fail('数值plot-log封装须明确提供source或blocks之一，不接受额外字段。');
-    candidate = replayNumericPlotLog(raw.baseEngine, hasSource ? parseNumericPlotLogSource(raw.source) : raw.blocks);
+    candidate = replayPlotMessage(raw.baseEngine, raw, true);
+  } else if (raw.spec === 'dsh-tavern-lwb/plot-log-numeric-log' && raw.version === 1) {
+    if (!Array.isArray(raw.messages) || !raw.messages.length || raw.messages.length > 100 ||
+        Object.keys(raw).some(key => !['spec', 'version', 'baseEngine', 'messages'].includes(key))) fail('数值plot-log消息链须包含1至100条显式顺序消息。');
+    candidate = raw.messages.reduce((engine, message) => replayPlotMessage(engine, message), validateEngine(raw.baseEngine));
   } else if (raw.spec === 'dsh-tavern-lwb/upstream-wal' && raw.version === 1) {
     if (!Array.isArray(raw.records) || !raw.records.length || raw.records.length > 100) fail('WAL必须为1至100条按楼层排序的消息记录。');
     let engine = emptyEngine(), entries = 0;
@@ -116,7 +125,7 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
     for (const root of Object.keys(engine.variables)) if (!owned.has(root)) delete engine.variables[root];
     for (const path of Object.keys(engine.LWB_RULES_V2)) if (!owned.has(path.split(/[.\[]/u)[0])) delete engine.LWB_RULES_V2[path];
     candidate = engine;
-  } else fail('仅接受Bridge导出包、显式当前快照或State2消息WAL封装；不接受整个聊天metadata、检查点或脚本。');
+  } else fail('仅接受受支持的Bridge备份、显式快照或日志封装；不接受整个聊天metadata、独立检查点或脚本。');
   const engine = validateEngine(candidate);
   if (!engine.roots.length || !Object.keys(engine.variables).length) fail('状态备份没有可恢复的变量。');
   if (branchMap.length && onSelection) onSelection(branchMap);

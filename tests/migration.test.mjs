@@ -108,6 +108,20 @@ test('plot-log chains numeric-lock baselines but rejects other or unbound rules'
     { '数据["金币"]': { typeLock: 'number' } }, { 数据: { typeLock: 'number' } },
   ]) assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2 }, blocks), { code: 'LWB_PLOT_SUBSET' });
 });
+test('explicit plot-log message chain keeps boundaries and rejects a malformed suffix atomically', () => {
+  const baseEngine = applyText(emptyEngine(), initial).engine;
+  const parse = messages => parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric-log', version: 1, baseEngine, messages }));
+  const first = { blocks: [{ set: { 数据: { 金币: 20 } } }] };
+  const second = { source: '<plot-log>{"bump":{"数据":{"金币":2}}}</plot-log>' };
+  const engine = parse([first, second, second]);
+  assert.equal(engine.variables.数据.金币, 24);
+  assert.deepEqual(engine.LWB_RULES_V2, { '数据.金币': { typeLock: 'number' } });
+  for (const messages of [[], Array(101).fill(second), [first, null], [first, { ...second, blocks: [] }], [first, { ...second, floor: 3 }]]) {
+    assert.throws(() => parse(messages), { code: 'LWB_MIGRATION' });
+  }
+  assert.throws(() => parse([first, { source: second.source + '<plot-log>' }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.equal(baseEngine.variables.数据.金币, 10);
+});
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
   for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));

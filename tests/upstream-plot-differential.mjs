@@ -108,6 +108,8 @@ const continuation = [
 ];
 const sourceFor = blocks => blocks.map(block => `<plot-log>${JSON.stringify(block)}</plot-log>`).join('\n');
 let chain = { variables: { 数据: { 金币: 10, 深层: { 生命: 50 } } }, roots: ['数据'], LWB_RULES_V2: {} };
+const chainBase = chain;
+const messages = continuation.map((blocks, i) => i % 2 ? { blocks } : { source: sourceFor(blocks) });
 synthetic.reset(sourceFor(continuation[0]), { 数据: JSON.stringify(chain.variables.数据) });
 upstream.rulesSetTable({});
 for (const [index, blocks] of continuation.entries()) {
@@ -117,7 +119,9 @@ for (const [index, blocks] of continuation.entries()) {
   await upstream.applyVariablesForMessage(index);
   assert.ok(context.chatMetadata.LWB_PLOT_APPLIED_KEY?.[index], `message ${index} did not settle`);
   chain = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: chain, source }));
-  assert.deepEqual(chain.variables.数据, JSON.parse(context.chatMetadata.variables.数据));
+  const batch = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric-log', version: 1, baseEngine: chainBase, messages: messages.slice(0, index + 1) }));
+  assert.deepEqual(batch, chain, `message ${index}: batch vs individual replay`);
+  assert.deepEqual(batch.variables.数据, JSON.parse(context.chatMetadata.variables.数据));
   assert.deepEqual(chain.LWB_RULES_V2, Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([path, rule]) => [path, { typeLock: rule.typeLock }])));
 }
 console.log(`plot-log numeric: ${cases.length} standalone and ${continuation.length} chained upstream executor comparisons passed`);

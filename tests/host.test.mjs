@@ -215,6 +215,23 @@ test('state migration preview is read-only and confirmed restore creates a curre
   assert.equal(restored.engine.variables.数据.金币, 0); assert.equal(restored.parent, null);
   assert.equal((await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' })).status, 'initialized');
 });
+test('plot-log message chain previews atomically and commits only its final baseline', async () => {
+  const f = fixture(); await start(f);
+  const args = { gameId: 'a', expectedTextVersion: 'greeting-a' };
+  const baseEngine = { variables: { 数据: { 金币: 10 } }, roots: ['数据'], LWB_RULES_V2: {} };
+  const messages = [{ blocks: [{ set: { 数据: { 金币: 20 } } }] }, { blocks: [{ bump: { 数据: { 金币: 2 } } }] }];
+  const text = items => JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric-log', version: 1, baseEngine, messages: items });
+  const before = await f.service.readEngine('a', 1);
+  await assert.rejects(f.service.migrationPreview({ ...args, text: text([...messages, { source: '<plot-log>' }]) }), { code: 'LWB_PLOT_SUBSET' });
+  assert.deepEqual(await f.service.readEngine('a', 1), before);
+  const preview = await f.service.migrationPreview({ ...args, text: text(messages) });
+  assert.equal(preview.engine.variables.数据.金币, 22);
+  assert.deepEqual(await f.service.readEngine('a', 1), before);
+  await f.service.migrationCommit({ ...args, token: preview.token, confirmReplace: true });
+  const { record } = await f.service.read({ gameId: 'a' });
+  assert.equal(record.parent, null);
+  assert.deepEqual(record.engine, preview.engine);
+});
 test('WAL diagnostic preview commits without treating entries as story turns', async () => {
   const f = fixture(); await start(f);
   const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [{ v: 1, entries: [
