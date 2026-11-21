@@ -58,9 +58,19 @@ test('plot-log normalizes fixed operation aliases before applying set then bump'
   assert.throws(() => replayNumericPlotLog(wideBase, [{ bump: { 数据: { ...wide } }, 调整: { 数据: { ...wide } } }]), { code: 'LWB_PLOT_SUBSET' });
   assert.equal(base.variables.数据.金币, 10);
 });
+test('plot-log accepts explicit decimal bump strings without enabling custom aliases', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  const engine = replayNumericPlotLog(base, [{ bump: { 数据: { 金币: ' +2 ' } }, 调整: { 数据: { 金币: '-.5e1' } } }]);
+  assert.equal(engine.variables.数据.金币, 7);
+  assert.deepEqual(engine.LWB_RULES_V2, {});
+  for (const value of ['', '  ', '0x10', '0b10', '1e999', '增加', true, null]) {
+    assert.throws(() => replayNumericPlotLog(base, [{ bump: { 数据: { 金币: value } } }]), { code: 'LWB_PLOT_SUBSET' });
+  }
+  assert.throws(() => replayNumericPlotLog(base, [{ set: { 数据: { 金币: '2' } } }]), { code: 'LWB_PLOT_SUBSET' });
+});
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
-  for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { bump: { 数据: { 金币: '+2' } } }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));
+  for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));
   assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2: { '数据.金币': { ro: true } } }, [{ bump: { 数据: { 金币: 1 } } }]));
   assert.throws(() => replayNumericPlotLog(base, Array.from({ length: 17 }, () => ({ bump: { 数据: { 金币: 1 } } }))), { code: 'LWB_PLOT_SUBSET' });
   const huge = { ...base, variables: { 数据: { 金币: Number.MAX_VALUE } } };

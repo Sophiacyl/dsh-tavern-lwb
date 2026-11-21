@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.25
+
+- Accept explicit finite decimal strings as numeric plot-log bump deltas, including signs, fractions and exponents. Keep other string forms outside the subset.
+
 ## 0.1.0-beta.24
 
 - Merge fixed numeric plot-log operation aliases within one block: last set wins and bump deltas sum in input order before replay. Reject nonfinite sums and count all inputs toward the operation budget before merging.

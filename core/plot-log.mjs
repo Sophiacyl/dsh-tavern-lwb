@@ -56,7 +56,10 @@ export function replayNumericPlotLog(base, blocks) {
           }
           return;
         }
-        if (path.length < 2 || typeof value !== 'number' || !Number.isFinite(value)) fail('仅支持已有数值叶字段，不接受字符串增量、根赋值、数组或空值。');
+        // Upstream coerces bump payloads through Number. Accept only explicit
+        // decimal notation here, not empty strings, radix prefixes or aliases.
+        if (kind === 'bump' && typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(value.trim())) value = Number(value);
+        if (path.length < 2 || typeof value !== 'number' || !Number.isFinite(value)) fail('仅支持已有数值叶；bump可用有限十进制数字字符串，不接受根赋值、数组或空值。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');
