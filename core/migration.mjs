@@ -12,9 +12,27 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
     const log = raw.log;
     if (!log || log.version !== 1 || !log.floors || typeof log.floors !== 'object' || Array.isArray(log.floors)) fail('旧State2日志须为version:1及floors映射。');
     const floors = Object.keys(log.floors);
-    if (!floors.length || floors.length > 100 || floors.some(key => !/^(0|[1-9][0-9]*)$/u.test(key) || !Number.isSafeInteger(Number(key)))) fail('旧日志楼层须为最多100个规范非负整数。');
-    // Missing floor zero may hide a checkpoint-only initialization. Never guess it.
-    if (!Object.hasOwn(log.floors, '0')) fail('旧日志缺少第0楼，可能依赖旧检查点初始化；请先提供明确当前快照。');
+    if (floors.length > 100 || floors.some(key => !/^(0|[1-9][0-9]*)$/u.test(key) || !Number.isSafeInteger(Number(key)))) fail('旧日志楼层须为最多100个规范非负整数。');
+    let initialRecord = null;
+    if (!Object.hasOwn(log.floors, '0')) {
+      const checkpoint = raw.initialCheckpoint;
+      const point = checkpoint?.points?.['0'];
+      if (checkpoint?.version !== 1 || !point || !point.vars || typeof point.vars !== 'object' || Array.isArray(point.vars) || !point.rules || typeof point.rules !== 'object' || Array.isArray(point.rules)) fail('缺第0楼时须显式提供旧version:1检查点points[0]，不能猜测初值。');
+      const rules = Object.entries(point.rules).filter(([, rule]) => rule && typeof rule === 'object' && !Array.isArray(rule) && Object.keys(rule).length).map(([path, rule]) => ({ path, rule }));
+      if (rules.length !== Object.keys(point.rules).length || !rules.length) fail('初始检查点规则必须为非空有效声明。');
+      const roots = [...new Set(rules.map(item => item.path.split(/[.\[]/u)[0]))];
+      const selected = Object.create(null);
+      for (const root of roots) {
+        if (!Object.hasOwn(point.vars, root) || typeof point.vars[root] !== 'string' || !point.vars[root].trim()) fail('检查点受管根初值缺失或为空，不能无损恢复。');
+        Object.defineProperty(selected, root, { value: point.vars[root], enumerable: true });
+      }
+      const decoded = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-snapshot', version: 1, variables: selected, roots, LWB_RULES_V2: point.rules }));
+      initialRecord = { v: 1, entries: [
+        { kind: 'call', source: 'text', blocks: [], roots, rules: [], ops: roots.map(root => ({ op: 'set', path: root, value: decoded.variables[root], source: 'text' })) },
+        { kind: 'call', source: 'text', blocks: [], roots, rules, ops: [] }
+      ] };
+      branchMap.push({ floor: 0, selected: 0, source: 'explicit-legacy-checkpoint' });
+    }
     const records = floors.sort((a, b) => Number(a) - Number(b)).map(floor => {
       const old = log.floors[floor];
       if (!old || typeof old.signature !== 'string' || !Array.isArray(old.rules) || !Array.isArray(old.ops)) fail('旧日志缺少signature/rules/ops。');
@@ -26,6 +44,10 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
       branchMap.push({ floor: Number(floor), selected: 0 });
       return { v: 1, entries: [{ kind: 'text', blocks: [], rules: old.rules, ops, roots }] };
     });
+    if (initialRecord) {
+      if (records.length >= 100) fail('检查点加旧日志总楼层超过100。');
+      records.unshift(initialRecord);
+    }
     raw = { spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records };
   }
   if (raw.spec === 'dsh-tavern-lwb/upstream-swipes' && raw.version === 1) {

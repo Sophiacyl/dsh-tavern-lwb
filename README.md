@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.16`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.17`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
@@ -68,7 +68,7 @@ State页的“状态恢复与历史回放”支持粘贴Bridge v1状态导出包
 
 也可提供显式消息WAL封装：`{"spec":"dsh-tavern-lwb/upstream-wal","version":1,"records":[{"v":1,"entries":[...]}]}`。records仅含用户选定的一条分支按楼层顺序的State2消息记录（最多100条、128个entry，整个JSON64 KiB）。逐entry保留text/call顺序、roots归属和内部pop语义；指纹只检查格式，不证明原文真实性。正常守卫拒绝/操作失败按原版历史语义跳过，预览显示有界错误诊断；未归属text临时效果保留到后续根认领，历史重复数组删除沿用原执行器排序。结构/危险值/容量错误仍整批拒绝。诊断只保留拒绝项，共享10 KiB/30条预算（另为分支选择映射和省略摘要预留空间），超出显示省略数量；不称完整无损WAL迁移。每entry最多128操作/128规则，整个封装还受节点、深度和字节限制。结果仍只建立当前轮新基线，不迁移原楼号、swipe候选集合或检查点。
 
-旧`stateLogV2`可人工提供封装`{"spec":"dsh-tavern-lwb/legacy-state-log","version":1,"log":{"version":1,"floors":{"0":{"signature":"...","rules":[],"ops":[]}}}}`。保留旧内部操作，按数值楼层排序；显式roots数组（含空数组）保留，缺省/旧非数组roots按请求推导。必须含第0楼，不猜测旧检查点里的初始化；signature只作旧格式必填字段，不保留其正文指纹/去重语义，也不验证原文真实性；重复/空根、空规则及额外操作字段按Bridge更严格边界拒绝，不做上游宽松清洗。最多100楼、64 KiB，确认后只建立当前基线。
+旧`stateLogV2`可人工提供封装`{"spec":"dsh-tavern-lwb/legacy-state-log","version":1,"log":{"version":1,"floors":{"0":{"signature":"...","rules":[],"ops":[]}}}}`。保留旧内部操作，按数值楼层排序；显式roots数组（含空数组）保留，缺省/旧非数组roots按请求推导。须含第0楼；若旧日志缺第0楼，可在同封装显式提供`initialCheckpoint:{"version":1,"points":{"0":{"vars":字符串根表,"rules":规则表}}}`，仅恢复非空规则声明的根，先写值后恢复规则。不接受v4检查点、空根值或缺失受管值，也不从当前宿主变量猜补；日志已有第0楼则忽略检查点，避免重复初始化。signature只作旧格式必填字段，不保留其正文指纹/去重语义，也不验证原文真实性；重复/空根、空规则及额外操作字段按Bridge更严格边界拒绝，不做上游宽松清洗。最多100楼、64 KiB，确认后只建立当前基线。
 
 可使用显式候选路径封装 `{"spec":"dsh-tavern-lwb/upstream-swipes","version":1,"floors":[{"floor":0,"selected":1,"records":[候选0的State2记录,候选1的State2记录]}]}`。楼层必须严格递增，selected必须存在；选中记录缺失/null会拒绝，不退回其它候选，明确无操作可提供`{"v":1,"entries":[]}`。整个封装64 KiB、最多100楼/200候选/128选中entry。预览显示原楼层与选择序号，只回放选定路径到当前基线，不重建目标游戏的原楼号或所有分支。
 

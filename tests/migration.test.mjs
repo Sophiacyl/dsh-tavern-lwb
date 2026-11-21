@@ -64,6 +64,26 @@ test('legacy stateLogV2 floors migrate in numeric order and derive missing root 
   assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: ['constructor'] } })));
 });
 
+test('explicit legacy floor-zero checkpoint restores values before readonly rules', () => {
+  const pack = checkpoint => JSON.stringify({ spec: 'dsh-tavern-lwb/legacy-state-log', version: 1,
+    initialCheckpoint: checkpoint, log: { version: 1, floors: { '2': { signature: '', roots: [], rules: [], ops: [{ op: 'inc', path: '数据.金币', delta: 1 }] } } } });
+  const checkpoint = { version: 1, points: { '0': { vars: { 数据: '{"金币":10}', native: 'do-not-import' }, rules: { '数据.金币': { ro: true } } } } };
+  const diagnostics = [], engine = parseStateBackup(pack(checkpoint), { onDiagnostics: row => diagnostics.push(row) });
+  assert.equal(engine.variables.数据.金币, 10);
+  assert.equal(engine.LWB_RULES_V2['数据.金币'].ro, true);
+  const checkpointOnly = JSON.parse(pack(checkpoint)); checkpointOnly.log.floors = {};
+  const restoredOnly = parseStateBackup(JSON.stringify(checkpointOnly));
+  assert.equal(restoredOnly.variables.数据.金币, 10);
+  assert.equal(restoredOnly.LWB_RULES_V2['数据.金币'].ro, true);
+  assert.equal(Object.hasOwn(engine.variables, 'native'), false);
+  assert.ok(diagnostics.some(row => row.errors.length));
+  assert.throws(() => parseStateBackup(pack({ ...checkpoint, version: 4 })));
+  const withZero = JSON.parse(pack({ version: 999 }));
+  withZero.log.floors['0'] = { signature: '', roots: ['数据'], rules: [], ops: [{ op: 'set', path: '数据', value: { 金币: 20 } }] };
+  assert.equal(parseStateBackup(JSON.stringify(withZero)).variables.数据.金币, 21);
+  assert.throws(() => parseStateBackup(pack({ version: 1, points: { '0': { vars: {}, rules: { '数据.金币': { ro: true } } } } })));
+});
+
 const wal = records => JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records });
 const entry = (ops, patch = {}) => ({ kind: 'call', source: 'text', blocks: [], rules: [], ops, roots: ['数据'], ...patch });
 test('explicit WAL preserves text/call order and internal pop semantics', () => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.17 — 2026-11-21
+
+- Accept an explicitly supplied legacy version-1 floor-zero checkpoint only when the old log has no floor-zero record.
+- Restore only rule-claimed string roots, then install the original rules in a separate entry so readonly initialization retains its admitted values.
+- Reject unsupported checkpoint versions and missing/empty claimed values; never infer native host variables or initialize twice.
+
 ## 0.1.0-beta.16 — 2026-11-21
 
 - Add an explicit legacy stateLogV2 envelope converter with numeric floor ordering and preserved explicit root claims.
