@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.12 — 2026-11-21
+
+- Add explicit numeric-leaf plot-log conversion against an unguarded, already owned baseline; require one strict JSON block and disjoint set/bump paths.
+- Reject overlap, multi-block ambiguity, digit-leading keys, complex values, aliases and unsupported push/del/guards; preserve numeric set type locks.
+- Bound input traversal before recursion and reject accessors without invoking them. This is a strict value-conversion subset, not a v1 host/runtime replacement.
+
 ## 0.1.0-beta.11 — 2026-11-21
 
 - Add explicit bounded upstream State2 message-WAL replay into a confirmed current baseline, retaining text/call order and declared root scope.

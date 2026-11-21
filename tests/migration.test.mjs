@@ -3,7 +3,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine } from '../core/index.mjs';
+import { replayNumericPlotLog } from '../core/plot-log.mjs';
 const initial = '数据.金币: 10';
+test('v1 numeric plot-log converts disjoint numeric fields', () => {
+  const base = applyText(emptyEngine(), initial + '\n数据.生命值: 100').engine;
+  const blocks = [{ bump: { 数据: { 金币: -2 } }, set: { 数据: { 生命值: 20 } } }];
+  const before = JSON.stringify(base), engine = replayNumericPlotLog(base, blocks);
+  assert.equal(engine.variables.数据.金币, 8); assert.equal(engine.variables.数据.生命值, 20); assert.equal(JSON.stringify(base), before);
+  const packed = JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, blocks });
+  assert.deepEqual(parseStateBackup(packed), engine);
+});
+test('plot-log subset rejects semantic ambiguity instead of guessing', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { bump: { 数据: { 金币: '+2' } } }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));
+  assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2: { '数据.金币': { ro: true } } }, [{ bump: { 数据: { 金币: 1 } } }]));
+  assert.throws(() => replayNumericPlotLog(base, [{ set: { 数据: { 金币: 20 } }, bump: { 数据: { 金币: -2 } } }]));
+  assert.throws(() => replayNumericPlotLog(base, [{ bump: { 数据: { 金币: 1 } } }, { bump: { 数据: { 金币: 2 } } }]));
+  const numericKeys = { variables: { R: { '01': 10, '1': 'abc' } }, roots: ['R'], LWB_RULES_V2: {} };
+  assert.throws(() => replayNumericPlotLog(numericKeys, [{ bump: { R: { '01': 2 } } }]));
+  let deep = 1; for (let i = 0; i < 30; i++) deep = { a: deep };
+  assert.throws(() => replayNumericPlotLog(base, [{ set: deep }]), { code: 'LWB_PLOT_SUBSET' });
+  let called = false; const getter = {}; Object.defineProperty(getter, 'set', { enumerable: true, get() { called = true; return {}; } });
+  assert.throws(() => replayNumericPlotLog(base, [getter])); assert.equal(called, false);
+});
 test('Bridge backup preserves values and readonly rules without executing them', () => {
   let engine = applyText(emptyEngine(), initial).engine;
   engine = applyText(engine, '$ro 数据.金币').engine;

@@ -1,6 +1,7 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
 import { validateEngine, emptyEngine, applyText, applyRecordedEntry } from './index.mjs';
+import { replayNumericPlotLog } from './plot-log.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_MIGRATION' }); };
 export function parseStateBackup(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 64 * 1024) fail('状态备份必须为不超过64 KiB的JSON文本。');
@@ -29,6 +30,8 @@ export function parseStateBackup(text) {
     }
     if (!raw.LWB_RULES_V2 || typeof raw.LWB_RULES_V2 !== 'object' || Array.isArray(raw.LWB_RULES_V2)) fail('上游快照缺少明确规则表；不从值推断约束。');
     candidate = { variables, roots: raw.roots, LWB_RULES_V2: raw.LWB_RULES_V2 };
+  } else if (raw.spec === 'dsh-tavern-lwb/plot-log-numeric' && raw.version === 1) {
+    candidate = replayNumericPlotLog(raw.baseEngine, raw.blocks);
   } else if (raw.spec === 'dsh-tavern-lwb/upstream-wal' && raw.version === 1) {
     if (!Array.isArray(raw.records) || !raw.records.length || raw.records.length > 100) fail('WAL必须为1至100条按楼层排序的消息记录。');
     let engine = emptyEngine(), entries = 0;
