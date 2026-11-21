@@ -125,6 +125,18 @@ test('plot-log readonly numeric leaves skip writes without adding locks', () => 
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { n: 'bad' } } }]), { code: 'LWB_PLOT_SUBSET' });
 });
+test('plot-log JSON arrays combine entries within one block, not across blocks', () => {
+  const baseEngine = applyText(emptyEngine(), initial).engine;
+  const entries = [{ bump: { 数据: { 金币: 2 } } }, { 调整: { 数据: { 金币: 3 } } }, { set: { 数据: { 金币: 20 } } }];
+  const source = `<plot-log>${JSON.stringify(entries)}</plot-log>`;
+  const parsed = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine, source }));
+  assert.equal(parsed.variables.数据.金币, 15);
+  assert.deepEqual(parsed, replayNumericPlotLog(baseEngine, [entries]));
+  assert.equal(replayNumericPlotLog(baseEngine, entries).variables.数据.金币, 20);
+  for (const bad of [[], [null], [entries], [{}], [...entries, { set: { 数据: { '$ro 金币': 5 } } }]]) {
+    assert.throws(() => replayNumericPlotLog(baseEngine, [bad]), { code: 'LWB_PLOT_SUBSET' });
+  }
+});
 test('explicit plot-log message chain keeps boundaries and rejects a malformed suffix atomically', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;
   const parse = messages => parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric-log', version: 1, baseEngine, messages }));

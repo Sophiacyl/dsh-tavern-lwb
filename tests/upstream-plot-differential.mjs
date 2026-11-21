@@ -74,6 +74,15 @@ for (const value of ['0', '-0', '42', ' -2.50 ', '0.00007', '9007199254740993'])
   cases.push([10, [{ record: set(value).set }]]);
   cases.push([10, [{ ...set(20), 記下: set(value).set }, bump('0.25')]]);
 }
+cases.push(
+  [10, [[bump(2), bump(3), set(20)]]],
+  [10, [[set(20), { record: set(40).set }, bump(3)], bump(-2)]],
+  [10, [[bump(1e20), bump(-1e20), bump('0.25')]]],
+  [10, [[bump(1e20), bump('0.25'), bump(-1e20)]]],
+  [10, [[bump(2)], [bump(3)]]],
+);
+assert.deepEqual(upstream.parseBlock(JSON.stringify({ set: { 数据: { '$ro 金币': 1 } } })).at(-1),
+  { operation: 'guard', data: [{ path: '金币', directives: ['$ro'] }] });
 let seed = 0x1302c03;
 const random = limit => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % limit; };
 const values = [0, 1, -1, 0.1, 1e20, -1e20, 1e-200, -1e-200, 2 ** 53, 3.5];

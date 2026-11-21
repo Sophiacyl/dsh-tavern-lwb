@@ -76,13 +76,17 @@ export function replayNumericPlotLog(base, blocks) {
   const leaves = new Map();
   let count = 0;
   for (const block of boundedCopy(blocks)) {
-    if (!plain(block) || !Object.keys(block).length) fail('需要非空JSON操作对象。');
+    const entries = Array.isArray(block) ? block : [block];
+    if (!entries.length) fail('JSON操作数组不能为空。');
     const groups = new Map();
-    for (const [key, value] of Object.entries(block)) {
-      const kind = opNames.get(key.toLowerCase().trim());
-      if (!kind) fail('仅支持set/bump及其固定操作名别名。');
-      if (!groups.has(kind)) groups.set(kind, []);
-      groups.get(kind).push(value);
+    for (const entry of entries) {
+      if (!plain(entry) || !Object.keys(entry).length) fail('每个JSON操作条目须为非空对象。');
+      for (const [key, value] of Object.entries(entry)) {
+        const kind = opNames.get(key.toLowerCase().trim());
+        if (!kind) fail('仅支持set/bump及其固定操作名别名。');
+        if (!groups.has(kind)) groups.set(kind, []);
+        groups.get(kind).push(value);
+      }
     }
     for (const kind of ['set', 'bump']) {
       if (!groups.has(kind)) continue;

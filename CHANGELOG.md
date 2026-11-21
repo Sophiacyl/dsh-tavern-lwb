@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.32
+
+- Accept a nonempty JSON array of operation objects within one numeric plot-log block, preserving set overwrite and ordered bump summation across its entries. Nested or malformed entries still reject the entire candidate.
+
 ## 0.1.0-beta.31
 
 - Honor explicit readonly guards on existing plot-log numeric leaves: skip valid writes and preserve the rule without adding a type lock. Other valid operations in the message still replay.
