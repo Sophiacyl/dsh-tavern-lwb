@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.35
+
+- Support push into existing managed root scalar arrays with the same explicit growth, readonly, ordering and deduplication rules as nested arrays. Keep root creation and scalar coercion unsupported.
+
 ## 0.1.0-beta.34
 
 - Extend plot-log push to existing managed arrays of finite numbers, strings and booleans. Keep scalar types distinct during deduplication and preserve string text as-is.

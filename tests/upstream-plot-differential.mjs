@@ -187,4 +187,25 @@ for (const [rule, blocks, initial = [1, 1]] of arrayCases) {
   assert.deepEqual(actual.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.deepEqual(Object.keys(upstream.rulesGetTable()), Object.keys(base.LWB_RULES_V2));
 }
-console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded and ${arrayCases.length} array push upstream comparisons passed`);
+const rootPush = value => ({ push: { 清单: value } });
+const rootCases = [
+  [{ arrayGrow: true, typeLock: 'array' }, [1, 1, '1'], [rootPush([1, '1', 2, true]), rootPush('ok')]],
+  [{ arrayGrow: true }, [], [[rootPush(false), { 追加: { 清单: 'false' } }], rootPush([false, ''])]],
+  [{ arrayGrow: true }, [1], [rootPush(1)]],
+  [{ arrayGrow: true, ro: true }, ['old'], [rootPush('new')]],
+  [null, [false], [rootPush(true)]],
+];
+for (const [rule, initial, blocks] of rootCases) {
+  const base = { variables: { 清单: initial }, roots: ['清单'], LWB_RULES_V2: rule ? { 清单: rule } : {} };
+  const source = sourceFor(blocks);
+  synthetic.reset(source, { 清单: JSON.stringify(initial) });
+  upstream.rulesSetTable(rule ? { 清单: { typeLock: rule.typeLock ?? 'unknown', arrayPolicy: 'grow', ro: rule.ro } } : {});
+  await upstream.applyVariablesForMessage(0);
+  const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
+  const { chatMetadata } = synthetic.getContext();
+  assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
+  assert.deepEqual(actual.variables.清单, JSON.parse(chatMetadata.variables.清单));
+  assert.deepEqual(actual.LWB_RULES_V2, base.LWB_RULES_V2);
+  assert.deepEqual(Object.keys(upstream.rulesGetTable()), Object.keys(base.LWB_RULES_V2));
+}
+console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded, ${arrayCases.length} nested and ${rootCases.length} root array push upstream comparisons passed`);

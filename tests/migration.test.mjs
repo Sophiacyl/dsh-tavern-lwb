@@ -145,6 +145,22 @@ test('plot-log push preserves scalar types and does not parse strings', () => {
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.deepEqual(base.variables.R.a, [1, '1', false, false]);
 });
+test('plot-log push supports existing managed root arrays without creating them', () => {
+  const base = { variables: { R: [1, 1, '1'] }, roots: ['R'], LWB_RULES_V2: { R: { arrayGrow: true, typeLock: 'array' } } };
+  const result = replayNumericPlotLog(base, [{ push: { R: [1, '1', 2, true] } }, { append: { R: 'ok' } }]);
+  assert.deepEqual(result.variables.R, [1, 1, '1', 2, true, 'ok']);
+  assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
+  for (const rule of [{ ro: true, arrayGrow: true }, { arrayGrow: false }]) {
+    const locked = { ...base, LWB_RULES_V2: { R: rule } };
+    assert.deepEqual(replayNumericPlotLog(locked, [{ push: { R: 2 } }]), locked);
+  }
+  for (const variables of [{}, { R: 1 }, { R: '[1]' }, { R: {} }]) {
+    assert.throws(() => replayNumericPlotLog({ ...base, variables, LWB_RULES_V2: {} }, [{ push: { R: 2 } }]), { code: 'LWB_PLOT_SUBSET' });
+  }
+  assert.throws(() => replayNumericPlotLog({ ...base, roots: [], LWB_RULES_V2: {} }, [{ push: { R: 2 } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog(base, [{ set: { R: 2 } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.deepEqual(base.variables.R, [1, 1, '1']);
+});
 test('plot-log JSON arrays combine entries within one block, not across blocks', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;
   const entries = [{ bump: { 数据: { 金币: 2 } } }, { 调整: { 数据: { 金币: 3 } } }, { set: { 数据: { 金币: 20 } } }];

@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.34 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.35 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.34'
+    const VERSION = '0.1.0-beta.35'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
