@@ -18,6 +18,14 @@ test('distributed ZIP passes actual Tavern parser, contains required licenses an
   assert.equal(pkg.name, 'dsh-tavern-lwb');
   assert.equal(pkg.version, '0.1.0-beta.15');
   assert.equal(pkg.dependencies, undefined);
+  assert.equal(archive.length, manifest.bytes);
+  assert.deepEqual([...files.keys()].sort(), manifest.files.map(item => item.path).sort());
+  for (const item of manifest.files) {
+    const shipped = files.get(item.path), current = await readFile(path.join(root, item.path));
+    assert.equal(shipped.length, item.size, item.path + ' size');
+    assert.equal(createHash('sha256').update(shipped).digest('hex'), item.sha256, item.path + ' manifest hash');
+    assert.deepEqual(shipped, current, item.path + ' must match current runtime source');
+  }
   assert.ok(files.has('licenses/LittleWhiteBox-LICENSE.md'));
   assert.ok(files.has('vendor/LICENSE-js-yaml.txt'));
   assert.ok(files.has('NOTICE'));
