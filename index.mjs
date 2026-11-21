@@ -17,7 +17,8 @@ export function apply(ctx) {
   const memory = createMemoryService(tavern, records, { readStateEngine: service.readEngine });
   ctx.effect(() => async () => { const memoryDone = memory.dispose(); await service.dispose(); await records.dispose(); await memoryDone; });
   const handlers = { read: service.read, enable: service.enable, preview: service.preview,
-    initialize: service.initialize, process: service.process, export: service.exportState };
+    initialize: service.initialize, process: service.process, export: service.exportState,
+    'migration-preview': service.migrationPreview, 'migration-commit': service.migrationCommit };
   for (const [id, handler] of Object.entries(handlers)) tavern.handle(name + '/' + id, handler);
   tavern.turnSection({ name: 'state', position: 'after', text: service.prompt });
   tavern.settlementTask({ name: 'state', title: '小白状态', phase: 'after', run: service.automatic });

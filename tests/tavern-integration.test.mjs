@@ -80,6 +80,9 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   const context = await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' });
   assert.equal(context.length, 1);
   assert.ok(context[0].text.includes('90'));
+  const stateBackup = await call('export');
+  const restorePreview = await call('migration-preview', { text: stateBackup.text, expectedTextVersion: 'reply-v1' });
+  assert.equal(restorePreview.engine.variables.数据.角色.生命值, 90);
   const exported = await api.exportGame('synthetic-chat');
   assert.ok(exported.data);
   await api.gameForked({ sourceChatId: 'synthetic-chat', targetChatId: 'synthetic-fork', targetSessionId: 'synthetic-fork-game', keyMap: new Map([['1\0greeting', 'fork-greeting'], ['2\0reply-v1', 'fork-reply']]) });

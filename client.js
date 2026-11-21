@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.9 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.10 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.9'
+    const VERSION = '0.1.0-beta.10'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
@@ -40,6 +40,44 @@ window.__ModuleLoader__.load({
         ['errors', 'corrections', 'changes'].map(key => h('div', { key },
           h('strong', { style: { fontSize: 12 } }, { errors: '错误', corrections: '修正', changes: '变更' }[key]),
           h('pre', { style: styles.pre }, json(value[key] == null ? [] : value[key])))))
+    }
+
+    function MigrationPanel({ ui, gameId, snapshot, onSaved }) {
+      const [text, setText] = React.useState('')
+      const [from, setFrom] = React.useState('2'), [to, setTo] = React.useState('2')
+      const [initial, setInitial] = React.useState(SAMPLE)
+      const [preview, setPreview] = React.useState(null), [busy, setBusy] = React.useState(false), [error, setError] = React.useState('')
+      const epoch = React.useRef(0)
+      React.useEffect(() => { epoch.current++; setPreview(null); return () => { epoch.current++ } }, [gameId, snapshot?.turn, snapshot?.textVersion, snapshot?.record?.stateHash, snapshot?.enabled, snapshot?.busy])
+      const allowed = !!snapshot?.enabled && !snapshot?.busy && !busy
+      async function act(mode) {
+        if (!allowed) return
+        const ticket = ++epoch.current; setBusy(true); setError(''); setPreview(null)
+        try {
+          const value = await ui.callHost(NAME + '/migration-preview', { gameId, expectedTextVersion: snapshot.textVersion, mode, text, initialText: initial, from: Number(from), to: Number(to) })
+          if (ticket === epoch.current) setPreview(value)
+        } catch (e) { if (ticket === epoch.current) setError(errorText(e)) }
+        finally { setBusy(false) }
+      }
+      async function commit() {
+        if (!allowed || !preview || !window.confirm('确认以预览状态替换当前轮状态并建立新基线？历史轮不改写，较晚旧快照可能失效。请先导出备份。')) return
+        const ticket = ++epoch.current; setBusy(true); setError('')
+        try {
+          await ui.callHost(NAME + '/migration-commit', { gameId, token: preview.token, expectedTextVersion: snapshot.textVersion, confirmReplace: true })
+          if (ticket === epoch.current) { setPreview(null); onSaved() }
+        } catch (e) { if (ticket === epoch.current) { setError(errorText(e)); setPreview(null) } }
+        finally { setBusy(false) }
+      }
+      const edit = setter => event => { epoch.current++; setPreview(null); setter(event.target.value) }
+      return h('details', { style: styles.box }, h('summary', null, '状态恢复与历史回放'),
+        h('p', { style: styles.muted }, '先导出备份。支持Bridge状态导出包；回放严格处理已完成正文的state块，失败整批停止；确认后只建立当前轮新基线，不改写旧轮。'),
+        error ? h('p', { role: 'alert' }, error) : null,
+        h('label', null, '状态备份JSON', h('textarea', { value: text, onChange: edit(setText), disabled: busy, style: styles.textarea, 'aria-label': '状态备份JSON' })),
+        h('button', { onClick: () => act('backup'), disabled: !allowed || !text.trim(), style: styles.button }, '预览恢复状态'),
+        h('label', null, '回放初始化文本', h('textarea', { value: initial, onChange: edit(setInitial), disabled: busy, style: styles.textarea, 'aria-label': '回放初始化文本' })),
+        h('div', { style: styles.row }, h('label', null, '回放起始轮', h('input', { type: 'number', value: from, onChange: edit(setFrom), disabled: busy })), h('label', null, '回放结束轮', h('input', { type: 'number', value: to, onChange: edit(setTo), disabled: busy }))),
+        h('button', { onClick: () => act('history'), disabled: !allowed, style: styles.button }, '预览历史回放'),
+        preview ? h('div', null, h('pre', { style: styles.pre }, json(preview)), h('button', { onClick: commit, disabled: !allowed, style: styles.button }, '确认建立迁移基线')) : null)
     }
 
     function StatePanel({ ui, gameId }) {
@@ -314,9 +352,10 @@ window.__ModuleLoader__.load({
           h('h3', { style: styles.heading }, '手动处理已有回复'),
           h('p', { style: styles.muted }, '用于安装或开启插件前，当前回复已经存在的 <state> 块。仅处理当前已结算的正文版本，由你主动触发。'),
           button('处理当前回复', processCurrent, busy || !snapshot || !snapshot.enabled || !state || !settled(state, snapshot))),
+        h(MigrationPanel, { key: gameId, ui, gameId, snapshot, onSaved: () => session.current?.refresh() }),
         h('details', { style: styles.box },
           h('summary', null, '验证版支持边界与宿主限制'),
-          h('p', { style: styles.muted }, '本面板只显示 record.engine.variables；状态解析、规则检查、去重及版本写入由配套宿主负责。仅支持宿主已实现的 State2 子集；不执行 taskjs、JavaScript、旧版 plot-log 或旧酒馆脚本 API。现有历史的批量迁移与回放不在此面板提供。'),
+          h('p', { style: styles.muted }, '本面板只显示 record.engine.variables；状态解析、规则检查、去重及版本写入由配套宿主负责。仅支持宿主已实现的 State2 子集；不执行 taskjs、JavaScript、旧版 plot-log 或旧酒馆脚本 API。受控State2历史可用上面的迁移面板预览；完整WAL、swipe和旧脚本迁移尚不支持。'),
           h('p', { style: styles.muted }, '宿主版本：' + String(snapshot && snapshot.version || '未连接')),
           snapshot && snapshot.limits ? h('pre', { style: styles.pre }, json(snapshot.limits)) : null))
     }

@@ -11,12 +11,12 @@ const { readPluginArchive } = await import(referenceModule('api8', 'domain/user-
 const root = new URL('../', import.meta.url).pathname;
 
 test('distributed ZIP passes actual Tavern parser, contains required licenses and runs standalone without research imports', async t => {
-  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.9.zip'));
+  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.10.zip'));
   const manifest = JSON.parse(await readFile(path.join(root, 'dist/manifest.json')));
   assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.sha256);
   const { pkg, files } = readPluginArchive(archive);
   assert.equal(pkg.name, 'dsh-tavern-lwb');
-  assert.equal(pkg.version, '0.1.0-beta.9');
+  assert.equal(pkg.version, '0.1.0-beta.10');
   assert.equal(pkg.dependencies, undefined);
   assert.ok(files.has('licenses/LittleWhiteBox-LICENSE.md'));
   assert.ok(files.has('vendor/LICENSE-js-yaml.txt'));
@@ -36,5 +36,7 @@ test('distributed ZIP passes actual Tavern parser, contains required licenses an
     handle(id) { registrations.push(id); }, turnSection() {}, settlementTask() {}, manualTask() {}, startTask() {}, getHistory() {},
   };
   entry.apply({ tavern, effect() {} });
-  assert.equal(registrations.length, 14);
+  assert.equal(registrations.length, 16);
+  assert.ok(registrations.includes(pkg.name + '/migration-preview'));
+  assert.ok(registrations.includes(pkg.name + '/migration-commit'));
 });

@@ -20,6 +20,8 @@ The exact upstream copyright, license and NOTICE are retained under `licenses/` 
 
 ## Independently authored adaptation
 
+`core/migration.mjs` adds explicit Bridge backup and selected-root upstream-current-snapshot conversion, informed by the pinned State2 executor's string-root encode/decode contract. It does not run the original host, WAL migration, checkpoints, task scripts, plot-log or varevent code. The upstream-snapshot wrapper is a Bridge-defined interchange envelope, not an upstream official export format.
+
 `host/`, `core/`, `memory/`, `index.mjs`, `client.js`, build scripts and tests are the published adaptation source. The synthetic portable-memory fixture in `tests/memory-core.test.mjs` is adapted from LittleWhiteBox `modules/story-summary/tests/summary-transfer.test.js` at the pinned revision, retaining the same original-author attribution and license terms. They implement DSH Tavern API wiring, bounded snapshots, portable-memory boundaries, scoped read macros, manual-summary submission and lifecycle UI. The portable-memory format and read-macro semantics intentionally interoperate with documented LittleWhiteBox data; they do not import its application entrypoint or browser/server host integration.
 
 The host and UI use flizzywine DSH Tavern's public API. No Tavern or SillyTavern runtime source is bundled. The optional integration tests load fixed public Tavern checkouts locally; these dependencies are downloaded explicitly and remain outside the committed/distributed package. Tests and fixtures use synthetic data only.

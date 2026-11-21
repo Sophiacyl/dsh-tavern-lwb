@@ -3,7 +3,7 @@
 import { readdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 export const ROOT = path.resolve(new URL('../', import.meta.url).pathname);
-const entries = ['package.json', 'index.mjs', 'host', 'core/index.mjs', 'core/README.md', 'memory', 'vendor', 'client.js', 'locale', 'icon.svg', 'README.md', 'LICENSE.md', 'PROVENANCE.md', 'NOTICE', 'licenses', 'CHANGELOG.md'];
+const entries = ['package.json', 'index.mjs', 'host', 'core', 'core/README.md', 'memory', 'vendor', 'client.js', 'locale', 'icon.svg', 'README.md', 'LICENSE.md', 'PROVENANCE.md', 'NOTICE', 'licenses', 'CHANGELOG.md'];
 export async function releaseFiles() {
   const out = [];
   async function walk(relative) {

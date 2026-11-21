@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.10 — 2026-11-21
+
+- Add explicit preview/confirmation for Bridge state backup restoration and selected-root upstream current snapshots, preserving readonly rules.
+- Add bounded strict State2 history replay into a new current-turn baseline, with source hashes and versions rechecked before commit.
+- Restore independently of an invalid prior lineage; treat the migrated current version as an idempotent baseline.
+- Reject plot-log/varevent replay rather than silently omitting legacy side effects; document unsupported full WAL/swipe migration and native global macro hooks.
+- Keep state restoration separate from per-turn memory and require a fresh preview after state/version/activity changes.
+
 ## 0.1.0-beta.9 — 2026-11-21
 
 - Scope merge review choices by game and candidate token; allow reselecting ordinary additions and remove duplicate gated-fact checkboxes.

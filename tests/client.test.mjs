@@ -37,6 +37,8 @@ test('real React panel enables, previews, confirms initialization; edits invalid
       if (method.endsWith('/read')) return structuredClone(snapshot);
       if (method.endsWith('/enable')) { snapshot.enabled = args.enabled; return { enabled: args.enabled }; }
       if (method.endsWith('/preview')) return { status: 'success', errors: [], corrections: [], changes: [], operationCount: 1, engine: sampleEngine };
+      if (method.endsWith('/migration-preview')) return { token: 'restore-token', engine: sampleEngine, report: [], turn: 1, textVersion: 'v1' };
+      if (method.endsWith('/migration-commit')) return { saved: true };
       if (method.endsWith('/initialize')) { snapshot.record = { engine: { ...sampleEngine, variables: { '<img src=x onerror=alert(1)>': '测试' } }, diagnostics: { status: 'success' } }; snapshot.initializable = false; return { saved: true }; }
       throw new Error('Unexpected ' + method);
     },
@@ -61,6 +63,12 @@ test('real React panel enables, previews, confirms initialization; edits invalid
   assert.equal(calls.filter(([method]) => method.endsWith('/initialize')).length, 1);
   assert.ok(dom.window.document.body.textContent.includes('<img src=x onerror=alert(1)>'));
   assert.equal(dom.window.document.querySelector('img'), null);
+  dom.window.confirm = () => true;
+  await act(async () => { button('预览历史回放').click(); await settle(); });
+  assert.ok(button('确认建立迁移基线'));
+  await act(async () => { button('确认建立迁移基线').click(); await settle(); });
+  assert.equal(calls.filter(([name]) => name.endsWith('/migration-commit')).length, 1);
+  assert.equal(calls.find(([name]) => name.endsWith('/migration-commit'))[1].confirmReplace, true);
   await act(async () => { root.render(panel.render({ gameId: 'game-b' })); await settle(); });
   assert.equal(stops, 2, 'changing game cleans up old subscriptions');
 });

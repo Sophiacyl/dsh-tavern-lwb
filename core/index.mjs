@@ -106,6 +106,8 @@ function checkEngine(input) {
 }
 
 export function emptyEngine() { return { variables: {}, LWB_RULES_V2: {}, roots: [] }; }
+// Explicit migration boundary: throws on invalid input rather than returning an empty fallback.
+export function validateEngine(input) { return checkEngine(input); }
 
 function scanBlocks(text) {
   const blocks = [];

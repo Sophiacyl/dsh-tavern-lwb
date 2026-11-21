@@ -1,9 +1,10 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
 // DSH Tavern adapter. Original implementation; state engine derived from LWB by biex.
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.9';
+export const VERSION = '0.1.0-beta.10';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -15,7 +16,7 @@ const clone = value => structuredClone(value);
 const short = value => String(value ?? '').slice(0, 240);
 
 export function createStateService(tavern, { now = () => Date.now(), withLock = null } = {}) {
-  const queues = new Map();
+  const queues = new Map(), migrationPreviews = new Map();
   let disposed = false;
   const live = () => { if (disposed) fail('LWB_UNLOADED', '插件已停止，请刷新页面。'); };
   const gameIdOf = value => {
@@ -92,7 +93,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
   async function save(gameId, turn, textVersion, engine, result, sourceKind, sourceDigest, signal, baseline = null) {
     live(); signal?.throwIfAborted();
     const data = recordData(engine, result, sourceKind, sourceDigest, baseline, turn);
-    const freshParent = await recordAt(gameId, turn - 1);
+    const freshParent = baseline ? await recordAt(gameId, turn - 1) : null;
     if (baseline && (!freshParent || freshParent.turn !== baseline.turn || freshParent.stateHash !== baseline.stateHash)) fail('LWB_PARENT_CHANGED', '前序状态已变化，请重新处理当前轮。');
     live(); signal?.throwIfAborted();
     await tavern.saveTurnData({ gameId, turn, textVersion, data });
@@ -151,7 +152,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
     const sourceDigest = digest(raw);
     const existing = await recordAt(gameId, turn);
     if (existing?.turn === turn && existing.textVersion === textVersion) {
-      if (existing.sourceKind === 'initialization') return { saved: false, status: 'initialized', turn, textVersion };
+      if (['initialization', 'migration'].includes(existing.sourceKind)) return { saved: false, status: 'initialized', turn, textVersion };
       if (existing.sourceDigest === sourceDigest) return { saved: false, status: 'duplicate', turn, textVersion };
       fail('LWB_VERSION_MISMATCH', '同一正文版本的内容发生变化，未重复处理。');
     }
@@ -230,6 +231,55 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
     try { await recordAt(gameId, state.turn); } catch (error) { warning = { code: error.code || 'LWB_RECORD', message: error.message }; }
     return { fileName: 'lwb-state-export.json', text: JSON.stringify({ spec: 'dsh-tavern-lwb/export', version: 1, pluginVersion: VERSION, turn: raw.turn, engine: raw.engine, ...(warning ? { warning } : {}) }, null, 2) };
   }
+  async function migrationPreview({ gameId, expectedTextVersion, mode = 'backup', text, initialText, from, to } = {}) {
+    return serial(gameId, async () => {
+      const state = await current(gameId, expectedTextVersion);
+      if (!(await settings(gameId)).enabled) fail('LWB_DISABLED', '请先开启本局状态。');
+      const oldRow = await tavern.readTurnData({ gameId, turn: state.turn });
+      const old = oldRow ? { stateHash: digest(JSON.stringify(oldRow)) } : null;
+      let engine, report = [];
+      if (mode === 'backup') engine = parseStateBackup(text);
+      else if (mode === 'history') {
+        if (![from, to].every(Number.isSafeInteger) || from < 1 || to < from || to > state.turn || to - from >= 100) fail('LWB_MIGRATION', '历史范围须为已完成的1至100轮。');
+        const materials = []; let totalBytes = 0;
+        for (let turn = from; turn <= to; turn++) {
+          const material = await tavern.getTurn({ gameId, turn }); live();
+          if (!material || material.turn !== turn || !material.textVersion) fail('LWB_MIGRATION', '历史正文或版本缺失，停止回放。');
+          if (typeof material.rawText !== 'string' || (totalBytes += Buffer.byteLength(material.rawText)) > 256 * 1024) fail('LWB_MIGRATION', '历史原文缺失或总量超过256 KiB。');
+          materials.push({ turn, textVersion: material.textVersion, rawText: material.rawText });
+        }
+        ({ engine, report } = replayStateHistory(initialText, materials));
+        report = report.map((row, i) => ({ ...row, digest: digest(materials[i].rawText) }));
+      } else fail('LWB_MIGRATION', '未知状态迁移模式。');
+      recordData(engine, { status: 'success' }, 'migration', digest(JSON.stringify(engine)));
+      await current(gameId, expectedTextVersion);
+      const token = randomUUID();
+      for (const [key, value] of migrationPreviews) if (value.expires <= now()) migrationPreviews.delete(key);
+      if (migrationPreviews.size >= 32) fail('LWB_MIGRATION', '迁移预览过多，请稍后重试。');
+      migrationPreviews.set(token, { gameId, turn: state.turn, textVersion: state.textVersion, expectedHash: old?.stateHash || null, engine, report, expires: now() + 15 * 60 * 1000 });
+      return { token, engine, report, replacesExisting: Boolean(old), turn: state.turn, textVersion: state.textVersion };
+    });
+  }
+  async function migrationCommit({ gameId, expectedTextVersion, token, confirmReplace } = {}) {
+    return serial(gameId, async () => {
+      const state = await current(gameId, expectedTextVersion), draft = migrationPreviews.get(token);
+      if (!draft || draft.gameId !== gameId || draft.turn !== state.turn || draft.textVersion !== state.textVersion || draft.expires <= now()) fail('LWB_MIGRATION', '迁移预览已过期或版本改变，请重新预览。');
+      if (confirmReplace !== true) fail('LWB_MIGRATION', '需要明确确认建立迁移基线。');
+      if (!(await settings(gameId)).enabled) fail('LWB_DISABLED', '请先开启本局状态。');
+      const oldRow = await tavern.readTurnData({ gameId, turn: state.turn });
+      const old = oldRow ? { stateHash: digest(JSON.stringify(oldRow)) } : null;
+      if ((old?.stateHash || null) !== draft.expectedHash) fail('LWB_PARENT_CHANGED', '预览后状态发生变化，请重新预览。');
+      for (const row of draft.report) {
+        const material = await tavern.getTurn({ gameId, turn: row.turn });
+        if (!material || material.textVersion !== row.textVersion || digest(material.rawText) !== row.digest) fail('LWB_STALE', '预览后历史正文已变化，请重新回放。');
+      }
+      const fresh = await current(gameId, expectedTextVersion);
+      if (fresh.turn !== draft.turn) fail('LWB_STALE', '提交前轮次已变化，请重新预览。');
+      const result = await save(gameId, state.turn, state.textVersion, draft.engine, { status: 'success' }, 'migration', digest(JSON.stringify(draft.engine)));
+      migrationPreviews.delete(token);
+      return result;
+    });
+  }
   async function readEngine(gameId, turn) { live(); const row = await recordAt(gameId, turn); return row ? clone(row.engine) : null; }
-  return { read, readEngine, enable, preview, initialize, process, automatic, prompt, exportState, dispose() { disposed = true; return Promise.allSettled([...queues.values()]).then(() => undefined); } };
+  return { read, readEngine, enable, preview, initialize, process, automatic, prompt, exportState, migrationPreview, migrationCommit, dispose() { migrationPreviews.clear(); disposed = true; return Promise.allSettled([...queues.values()]).then(() => undefined); } };
 }

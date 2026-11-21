@@ -203,6 +203,48 @@ test('editing an earlier long-history parent invalidates its descendant', async 
   assert.equal((await f.service.read({ gameId: 'a' })).warning.code, 'LWB_PARENT_CHANGED');
 });
 
+test('state migration preview is read-only and confirmed restore creates a current baseline', async () => {
+  const f = fixture(); await start(f);
+  const backup = await f.service.exportState({ gameId: 'a' });
+  f.show('a', 2, 'v2', '<state>数据.金币: +5</state>'); await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' });
+  const p = await f.service.migrationPreview({ gameId: 'a', expectedTextVersion: 'v2', text: backup.text });
+  assert.equal((await f.service.readEngine('a', 2)).variables.数据.金币, 5);
+  await assert.rejects(f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2' }), { code: 'LWB_MIGRATION' });
+  await f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true });
+  const restored = (await f.service.read({ gameId: 'a' })).record;
+  assert.equal(restored.engine.variables.数据.金币, 0); assert.equal(restored.parent, null);
+  assert.equal((await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' })).status, 'initialized');
+});
+test('restore can establish a clean baseline after earlier parent changes', async () => {
+  const f = fixture(); await start(f); const backup = await f.service.exportState({ gameId: 'a' });
+  f.show('a', 2, 'v2', '<state>数据.金币: +1</state>');
+  f.show('a', 3, 'v3', '<state>数据.金币: +2</state>'); await f.service.process({ gameId: 'a', expectedTextVersion: 'v3' });
+  f.show('a', 2, 'v2', '<state>数据.金币: +1</state>'); await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' });
+  f.show('a', 3, 'v3'); assert.equal((await f.service.read({ gameId: 'a' })).warning.code, 'LWB_PARENT_CHANGED');
+  const p = await f.service.migrationPreview({ gameId: 'a', expectedTextVersion: 'v3', text: backup.text });
+  await f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v3', confirmReplace: true });
+  assert.equal((await f.service.read({ gameId: 'a' })).warning, null);
+});
+
+test('migration refuses to write when generation starts during history recheck', async () => {
+  const f = fixture(); await start(f);
+  f.show('a', 2, 'v2', '<state>数据.金币: +3</state>');
+  const p = await f.service.migrationPreview({ gameId: 'a', expectedTextVersion: 'v2', mode: 'history', initialText: initial, from: 2, to: 2 });
+  const original = f.tavern.getTurn;
+  f.tavern.getTurn = async args => { const result = await original(args); f.game('a').busy = true; return result; };
+  await assert.rejects(f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true }), { code: 'LWB_BUSY' });
+});
+
+test('history replay rechecks all versions at confirmation and rejects cross-game tokens', async () => {
+  const f = fixture(); await start(f);
+  f.show('a', 2, 'v2', '<state>数据.金币: +3</state>');
+  const p = await f.service.migrationPreview({ gameId: 'a', expectedTextVersion: 'v2', mode: 'history', initialText: initial, from: 2, to: 2 });
+  assert.equal(p.engine.variables.数据.金币, 3);
+  await assert.rejects(f.service.migrationCommit({ gameId: 'b', token: p.token, expectedTextVersion: 'greeting-b', confirmReplace: true }), { code: 'LWB_MIGRATION' });
+  f.game('a').texts.set(2, '<state>数据.金币: +9</state>');
+  await assert.rejects(f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true }), { code: 'LWB_STALE' });
+});
+
 test('export is a separate explicit data export, unload cancels queued work', async () => {
   const f = fixture(); await start(f);
   const output = await f.service.exportState({ gameId: 'a' });
