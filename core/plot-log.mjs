@@ -10,7 +10,8 @@ function boundedCopy(input) {
     if (value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) return value;
     if (!value || typeof value !== 'object' || (!Array.isArray(value) && !plain(value)) || seen.has(value)) fail('plot-log只接受无循环的普通JSON结构。');
     seen.add(value);
-    if (Array.isArray(value) && (value.length > 128 || Object.keys(value).length !== value.length)) fail('plot-log数组超限或包含空洞。');
+    if (Array.isArray(value) && (value.length > 128 || Object.keys(value).length !== value.length ||
+        Array.from({ length: value.length }, (_, i) => !Object.hasOwn(value, i)).some(Boolean))) fail('plot-log数组超限或包含空洞。');
     if (typeof value === 'object' && !Array.isArray(value) && Reflect.ownKeys(value).length > 4000) fail('plot-log对象字段超限。');
     const out = Array.isArray(value) ? [] : Object.create(null);
     for (const key of Reflect.ownKeys(value)) {
@@ -24,12 +25,13 @@ function boundedCopy(input) {
   return visit(input, 0);
 }
 export function replayNumericPlotLog(base, blocks) {
-  let engine = validateEngine(base);
+  const engine = validateEngine(base);
   if (Object.keys(engine.LWB_RULES_V2).length) fail('旧plot-log数值子集不迁移守卫规则；请使用无约束的明确基线。');
-  if (!Array.isArray(blocks) || blocks.length !== 1) fail('plot-log数值子集仅接受单个JSON块，避免消息分组语义歧义。');
+  if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
+  const leaves = new Map();
+  let count = 0;
   for (const block of boundedCopy(blocks)) {
     if (!plain(block) || !Object.keys(block).length || Object.keys(block).some(key => !['set', 'bump'].includes(key))) fail('仅支持严格JSON中的set/bump，拒绝push/del/guard/别名或其它指令。');
-    const ops = [], seen = new Set();
     for (const kind of ['set', 'bump']) {
       if (!Object.hasOwn(block, kind)) continue;
       if (!plain(block[kind])) fail('set/bump必须为根名到字段对象的映射。');
@@ -49,19 +51,30 @@ export function replayNumericPlotLog(base, blocks) {
           current = current[key];
         }
         if (!engine.roots.includes(path[0]) || typeof current !== 'number' || !Number.isFinite(current)) fail('字段必须属于已托管的数值基线。');
-        const identity = JSON.stringify(path);
-        if (seen.has(identity)) fail('同一路径set/bump重叠与原版消息前值语义有差异，不能转换。');
-        seen.add(identity);
-        ops.push(kind === 'set' ? { op: 'set', path: path.join('.'), value } : { op: 'inc', path: path.join('.'), delta: value });
-        if (ops.length > 128) fail('每块最多128个操作。');
+        if (++count > 128) fail('同一条消息最多128个操作。');
+        const identity = path.join('.');
+        const leaf = leaves.get(identity) ?? { value: current, locked: false };
+        if (kind === 'set') {
+          leaf.value = value;
+          leaf.locked = true;
+        } else {
+          // The guard reads persisted message-start state. The executor then
+          // subtracts the staged value and adds the resulting delta back to it.
+          const target = current + value;
+          const delta = target - leaf.value;
+          const next = leaf.value + delta;
+          if (![target, delta, next].every(Number.isFinite)) fail('plot-log数值计算超出有限范围，不采用部分结果。');
+          leaf.value = next;
+        }
+        leaves.set(identity, leaf);
       }
       walk(block[kind], []);
     }
-    const result = applyText(engine, JSON.stringify({ ops }));
-    if (!['success', 'noop'].includes(result.status)) fail('plot-log数值转换失败，不采用部分结果。');
-    engine = result.engine;
-    for (const op of ops) if (op.op === 'set') engine.LWB_RULES_V2[op.path] = { typeLock: 'number' };
-    engine = validateEngine(engine);
   }
-  return engine;
+  const ops = [...leaves].map(([path, leaf]) => ({ op: 'set', path, value: leaf.value }));
+  const result = applyText(engine, JSON.stringify({ ops }));
+  if (!['success', 'noop'].includes(result.status)) fail('plot-log数值转换失败，不采用部分结果。');
+  // Only upstream set installs a lock on an existing numeric leaf.
+  for (const [path, leaf] of leaves) if (leaf.locked) result.engine.LWB_RULES_V2[path] = { typeLock: 'number' };
+  return validateEngine(result.engine);
 }

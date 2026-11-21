@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.21`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.22`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
@@ -74,7 +74,7 @@ State页的“状态恢复与历史回放”支持粘贴Bridge v1状态导出包
 
 历史回放输入初始化文本和已完成轮次范围（最多100轮、正文总计256 KiB），只处理严格闭合`state`块；任何partial/failed或旧`plot-log`/`varevent`协议都会停止预览，不写数据。确认时重新核对全部原文摘要、正文版本和状态基线；旧轮改变则拒绝。预览15分钟有效，不自动调用模型。
 
-旧版`plot-log`可人工提取严格JSON，使用显式数值子集封装：`{"spec":"dsh-tavern-lwb/plot-log-numeric","version":1,"baseEngine":完整Bridge引擎,"blocks":[{"set":{"数据":{"生命值":20}},"bump":{"数据":{"金币":-2}}}]}`。只允许无规则、已托管且已存在的数值叶字段，单个JSON块、每条路径只写一次、键不得以数字开头；set后bump重叠与多块输入会明确拒绝，防止消息前值语义差异。set映射为number类型锁；空对象/no-op也按更窄子集拒绝。固定先set后bump；不自动读取原文标签，不支持别名、宽松JSON/TOML/YAML、字符串增量、push/del/guard或复杂路径。预览确认后仅建立当前基线，不运行旧脚本。
+旧版`plot-log`可人工提取严格JSON，使用显式数值子集封装：`{"spec":"dsh-tavern-lwb/plot-log-numeric","version":1,"baseEngine":完整Bridge引擎,"blocks":[{"set":{"数据":{"生命值":20}},"bump":{"数据":{"金币":-2}}}]}`。只允许无规则、已托管且已存在的数值叶字段，键不得以数字开头。`blocks` 是同一条原消息中按原顺序提取的1–16个JSON块，合计最多128个操作，不能混入其他消息。块内先set后bump；重叠路径的bump以消息前值算目标，再按上游顺序换算暂存增量，不做连续累加；中间值非有限时拒绝整批。只有set产生number类型锁，空对象拒绝；不自动读取原文标签，不支持别名、宽松JSON/TOML/YAML、字符串增量、push/del/guard或复杂路径。预览确认后仅建立当前基线，不运行旧脚本。
 
 `varevent`只读检查：在状态恢复区的文本框粘贴包含闭合`varevent`标签的内容，点“只读检查varevent（不执行）”。复用固定上游文档解析器，展示id/condition/display/js_execute、重复字段/事件警告；最多32 KiB、16块、128事件、单字段8000字符。只展示普通文本，不求值条件、不执行脚本、不注册触发器，也不生成迁移确认token。标签配对严格检查，但字段沿用上游宽松解析；未闭合字段引号可能影响事件边界；检查会展示原文/解析标题数并在不一致时警告，但不作为完整语法验证。此入口不替代事件运行时。
 

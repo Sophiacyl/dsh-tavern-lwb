@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.22 — 2026-11-21
+
+- Expand explicit numeric plot-log migration to ordered JSON blocks from one message, respecting persisted message-start values and the upstream staged arithmetic order for overlapping set/bump operations.
+- Keep the subset limited to existing managed numeric leaves with a rule-free baseline; reject nonfinite intermediate values atomically.
+
 ## 0.1.0-beta.21 — 2026-11-21
 
 - Add an explicit static-display varevent preview for unambiguous events with no condition or script, selecting the last nonempty display in each block.

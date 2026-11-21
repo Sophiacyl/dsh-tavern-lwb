@@ -26,7 +26,7 @@ node --experimental-loader ./tests/loader.mjs --test tests/*.test.mjs
 
 `tests/loader.mjs` 把 `tests/runtime/package.json` 声明的所有测试依赖统一解析到该隔离目录：Cordis 4.1.0、YAML 2.9.1、React/React DOM 19.2.0、jsdom 26.1.0、marked 16.3.0、chevrotain 11.2.0、Playwright 1.58.2；其传递依赖由 lockfile 固定。运行包不依赖此 loader，也不依赖本机 DSH 安装目录。
 
-真实 API 集成测试只导入公开参考源码，提供合成游戏、内存存储和合成模型结果。API 7／8 测试还验证记忆与宏贡献进入 Tavern 正文请求 Frame、核心事实在无关键词命中时保留、相关事实参与检索，以及关闭记忆开关后记忆段落消失。测试不启动网络 Host、不读取真实 profile，不创建模型请求。持久化测试只在 `tests/.tmp` 写合成 JSON，并在结束时清理自己创建的目录。发布测试检查 `0.1.0-beta.21` ZIP，须先运行 `npm run pack:zip`。
+真实 API 集成测试只导入公开参考源码，提供合成游戏、内存存储和合成模型结果。API 7／8 测试还验证记忆与宏贡献进入 Tavern 正文请求 Frame、核心事实在无关键词命中时保留、相关事实参与检索，以及关闭记忆开关后记忆段落消失。测试不启动网络 Host、不读取真实 profile，不创建模型请求。持久化测试只在 `tests/.tmp` 写合成 JSON，并在结束时清理自己创建的目录。发布测试检查 `0.1.0-beta.22` ZIP，须先运行 `npm run pack:zip`。
 
 可选离线WAL差分探针：将 `LWB_UPSTREAM_ROOT` 指向已准备的公开LittleWhiteBox checkout（HEAD须为707e03f2d7f75bb6588b29625b3bd61b6c4a7c5a且工作树干净），运行 `node tests/upstream-wal-differential.mjs`。不会下载或修改该checkout，只加载State2纯执行器；5组定向案例与64组固定种子多条目序列同时经WAL和显式swipe选择入口对照变量、规则与根归属；swipe用例混入未选非法记录，验证它们不执行，不执行ST宿主入口。另有3组旧stateLogV2归一化案例，对照重复/空根、显式空归属和缺省根推导。该脚本不在运行ZIP内。
 

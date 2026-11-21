@@ -13,12 +13,44 @@ test('v1 numeric plot-log converts disjoint numeric fields', () => {
   const packed = JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, blocks });
   assert.deepEqual(parseStateBackup(packed), engine);
 });
-test('plot-log subset rejects semantic ambiguity instead of guessing', () => {
+test('same-message plot-log blocks replay in order using persisted numeric base for each bump', () => {
+  const base = applyText(emptyEngine(), '数据.金币: 10\n数据.生命值: 100').engine;
+  const engine = replayNumericPlotLog(base, [
+    { set: { 数据: { 金币: 20 } } },
+    { bump: { 数据: { 金币: 3, 生命值: -10 } } },
+    { set: { 数据: { 生命值: 50 } } },
+    { bump: { 数据: { 生命值: 5 } } },
+  ]);
+  // Upstream bump's guard target uses message-start (10/100), then applies its
+  // delta to the currently staged value (20/50).
+  assert.equal(engine.variables.数据.金币, 13);
+  assert.equal(engine.variables.数据.生命值, 105);
+  assert.deepEqual(Object.keys(engine.LWB_RULES_V2).sort(), ['数据.生命值', '数据.金币']);
+});
+test('same-block set/bump overlap and repeated bumps do not accumulate', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  const blocks = [{ bump: { 数据: { 金币: 2 } }, set: { 数据: { 金币: 90 } } }, { bump: { 数据: { 金币: 3 } } }];
+  const engine = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, blocks }));
+  assert.equal(engine.variables.数据.金币, 13);
+  assert.deepEqual(engine.LWB_RULES_V2, { '数据.金币': { typeLock: 'number' } });
+  assert.equal(base.variables.数据.金币, 10);
+  const noSet = replayNumericPlotLog(base, blocks.map(({ bump }) => ({ bump })));
+  assert.equal(noSet.variables.数据.金币, 13);
+  assert.deepEqual(noSet.LWB_RULES_V2, {});
+});
+test('plot-log preserves the upstream subtract-then-add rounding order', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  const engine = replayNumericPlotLog(base, [{ set: { 数据: { 金币: 1e20 } }, bump: { 数据: { 金币: 1 } } }]);
+  assert.equal(engine.variables.数据.金币, 0);
+});
+test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
   for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { bump: { 数据: { 金币: '+2' } } }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));
   assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2: { '数据.金币': { ro: true } } }, [{ bump: { 数据: { 金币: 1 } } }]));
-  assert.throws(() => replayNumericPlotLog(base, [{ set: { 数据: { 金币: 20 } }, bump: { 数据: { 金币: -2 } } }]));
-  assert.throws(() => replayNumericPlotLog(base, [{ bump: { 数据: { 金币: 1 } } }, { bump: { 数据: { 金币: 2 } } }]));
+  assert.throws(() => replayNumericPlotLog(base, Array.from({ length: 17 }, () => ({ bump: { 数据: { 金币: 1 } } }))), { code: 'LWB_PLOT_SUBSET' });
+  const huge = { ...base, variables: { 数据: { 金币: Number.MAX_VALUE } } };
+  assert.throws(() => replayNumericPlotLog(huge, [{ bump: { 数据: { 金币: Number.MAX_VALUE } } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.equal(base.variables.数据.金币, 10);
   const numericKeys = { variables: { R: { '01': 10, '1': 'abc' } }, roots: ['R'], LWB_RULES_V2: {} };
   assert.throws(() => replayNumericPlotLog(numericKeys, [{ bump: { R: { '01': 2 } } }]));
   let deep = 1; for (let i = 0; i < 30; i++) deep = { a: deep };
