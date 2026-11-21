@@ -79,6 +79,25 @@ test('state backup restore preserves same-turn memory and rejects a changed stat
   assert.equal((await f.memory.read({ gameId: 'a' })).record.revision, memoryRevision);
 });
 
+test('legacy checkpoint migration confirms through the host while preserving current memory', async () => {
+  const f = fixture(); await f.state.enable({ gameId: 'a', enabled: true }); await f.previewImport();
+  const before = await f.memory.read({ gameId: 'a' });
+  const payload = { spec: 'dsh-tavern-lwb/legacy-state-log', version: 1,
+    log: { version: 1, floors: { '2': { signature: '', roots: [], rules: [], ops: [{ op: 'inc', path: '数据.金币', delta: 4 }] } } },
+    initialCheckpoint: { version: 1, points: { '0': { vars: { 数据: '{"金币":10}', irrelevant: 'not-selected' }, rules: { '数据.金币': { ro: true } } } } } };
+  const preview = await f.state.migrationPreview({ gameId: 'a', expectedTextVersion: 'v1', text: JSON.stringify(payload) });
+  assert.equal((await f.state.read({ gameId: 'a' })).record, null, 'preview does not write state');
+  assert.ok(preview.report.some(row => row.errors?.length));
+  assert.equal(preview.report.at(-1).selectedBranch[0].source, 'explicit-legacy-checkpoint');
+  await f.state.migrationCommit({ gameId: 'a', expectedTextVersion: 'v1', token: preview.token, confirmReplace: true });
+  const restored = await f.state.readEngine('a', 1);
+  assert.equal(restored.variables.数据.金币, 10);
+  assert.equal(restored.LWB_RULES_V2['数据.金币'].ro, true);
+  assert.equal(Object.hasOwn(restored.variables, 'irrelevant'), false);
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.revision, before.record.revision);
+  assert.equal((await f.state.process({ gameId: 'a', expectedTextVersion: 'v1' })).status, 'initialized');
+});
+
 test('stale preview and concurrent imports reject before memory replacement', async () => {
   const f = fixture(), p = await f.memory.preview({ gameId: 'a', text: pack('甲'), expectedTextVersion: 'v1' });
   await f.previewImport('乙');
