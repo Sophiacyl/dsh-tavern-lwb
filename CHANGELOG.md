@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.23
+
+- Accept fixed upstream top-level operation aliases for numeric plot-log set/bump, including case and whitespace normalization. Reject multiple names for the same operation within a block; no card-specific aliases are read.
+
 ## 0.1.0-beta.22 — 2026-11-21
 
 - Expand explicit numeric plot-log migration to ordered JSON blocks from one message, respecting persisted message-start values and the upstream staged arithmetic order for overlapping set/bump operations.

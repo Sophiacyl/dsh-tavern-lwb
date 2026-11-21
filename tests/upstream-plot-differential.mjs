@@ -54,6 +54,10 @@ const cases = [
   [10, [set(10)]], [10, [bump(0)]],
   [10, [{ set: { 数据: { 深层: { 生命: 55 } } }, bump: { 数据: { 金币: 2 } } }]],
 ];
+const setAliases = ['记下', '記下', '记录', '記錄', '录入', '錄入', ' ReCoRd ', ' SET '];
+const bumpAliases = ['推移', '变更', '變更', '调整', '調整', ' AdJuSt ', ' BUMP '];
+for (const key of setAliases) cases.push([10, [{ [key]: set(20).set }]]);
+for (const key of bumpAliases) cases.push([10, [{ [key]: bump(3).bump, 记下: set(20).set }]]);
 let seed = 0x1302c03;
 const random = limit => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % limit; };
 const values = [0, 1, -1, 0.1, 1e20, -1e20, 1e-200, -1e-200, 2 ** 53, 3.5];

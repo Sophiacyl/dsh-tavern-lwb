@@ -43,6 +43,17 @@ test('plot-log preserves the upstream subtract-then-add rounding order', () => {
   const engine = replayNumericPlotLog(base, [{ set: { 数据: { 金币: 1e20 } }, bump: { 数据: { 金币: 1 } } }]);
   assert.equal(engine.variables.数据.金币, 0);
 });
+test('plot-log normalizes fixed operation aliases before applying set then bump', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  const engine = replayNumericPlotLog(base, [{ ' AdJuSt ': { 数据: { 金币: -2 } }, 記下: { 数据: { 金币: 50 } } }]);
+  assert.equal(engine.variables.数据.金币, 8);
+  assert.deepEqual(engine.LWB_RULES_V2, { '数据.金币': { typeLock: 'number' } });
+  for (const keys of [['set', '记下'], ['BUMP', ' bump '], ['bump', '调整'], ['record', 'unknown']]) {
+    const block = Object.fromEntries(keys.map(key => [key, { 数据: { 金币: 2 } }]));
+    assert.throws(() => replayNumericPlotLog(base, [block]), { code: 'LWB_PLOT_SUBSET' });
+  }
+  assert.equal(base.variables.数据.金币, 10);
+});
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
   for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { bump: { 数据: { 金币: '+2' } } }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));

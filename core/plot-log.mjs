@@ -3,6 +3,11 @@
 import { validateEngine, applyText } from './index.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_PLOT_SUBSET' }); };
 const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+// Fixed top-level operation names from upstream varevent-editor.js OP_ALIASES.
+const opNames = new Map(Object.entries({
+  set: ['set', '记下', '記下', '记录', '記錄', '录入', '錄入', 'record'],
+  bump: ['bump', '推移', '变更', '變更', '调整', '調整', 'adjust'],
+}).flatMap(([kind, names]) => names.map(name => [name, kind])));
 function boundedCopy(input) {
   const seen = new Set(); let nodes = 0;
   function visit(value, depth) {
@@ -31,10 +36,18 @@ export function replayNumericPlotLog(base, blocks) {
   const leaves = new Map();
   let count = 0;
   for (const block of boundedCopy(blocks)) {
-    if (!plain(block) || !Object.keys(block).length || Object.keys(block).some(key => !['set', 'bump'].includes(key))) fail('仅支持严格JSON中的set/bump，拒绝push/del/guard/别名或其它指令。');
+    if (!plain(block) || !Object.keys(block).length) fail('需要非空JSON操作对象。');
+    const groups = new Map();
+    for (const [key, value] of Object.entries(block)) {
+      const kind = opNames.get(key.toLowerCase().trim());
+      if (!kind) fail('仅支持set/bump及其固定操作名别名。');
+      if (groups.has(kind)) fail('同块不接受多个名称指向同一操作。');
+      groups.set(kind, value);
+    }
     for (const kind of ['set', 'bump']) {
-      if (!Object.hasOwn(block, kind)) continue;
-      if (!plain(block[kind])) fail('set/bump必须为根名到字段对象的映射。');
+      if (!groups.has(kind)) continue;
+      const group = groups.get(kind);
+      if (!plain(group)) fail('set/bump必须为根名到字段对象的映射。');
       function walk(value, path) {
         if (plain(value)) {
           if (!Object.keys(value).length) fail('不接受空对象赋值。');
@@ -68,7 +81,7 @@ export function replayNumericPlotLog(base, blocks) {
         }
         leaves.set(identity, leaf);
       }
-      walk(block[kind], []);
+      walk(group, []);
     }
   }
   const ops = [...leaves].map(([path, leaf]) => ({ op: 'set', path, value: leaf.value }));
