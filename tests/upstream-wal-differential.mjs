@@ -22,6 +22,24 @@ const cases = [
   ['historical duplicate deletes', [entry([set({ 背包: ['a', 'b', 'c'] })]), entry([{ op: 'del', path: '数据.背包.0', source: 'json' }, { op: 'del', path: '数据.背包[0]', source: 'json' }], { roots: [] })]],
   ['earlier unclaimed rule', [entry([], { roots: [], rules: [{ path: '数据.金币', rule: { max: 5 } }] }), entry([set({ 金币: 10 })])]],
 ];
+// Reproducible sequences exercise persisted request ordering, including normal failures.
+let seed = 0x1b57;
+const random = limit => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % limit; };
+for (let sample = 0; sample < 64; sample++) {
+  const entries = [entry([set({ 金币: 10, 背包: ['a', 'b', 'c'] })])];
+  for (let step = 0; step < 16; step++) {
+    const source = random(2) ? 'text' : 'json';
+    const action = random(6);
+    const op = action === 0 ? { op: 'inc', path: '数据.金币', delta: random(11) - 5, source }
+      : action === 1 ? { op: 'set', path: '数据.金币', value: random(30), source }
+      : action === 2 ? { op: 'push', path: '数据.背包', value: 'item' + random(4), source }
+      : action === 3 ? { op: 'pop', path: '数据.背包', value: 'item' + random(4), source }
+      : action === 4 ? { op: 'del', path: '数据.背包[0]', source }
+      : { op: 'push', path: '数据.金币', value: 'invalid-array-target', source };
+    entries.push(entry([op], { roots: [] }));
+  }
+  cases.push(['seeded sequence ' + sample, entries]);
+}
 let checked = 0;
 for (const [name, entries] of cases) {
   replaceRules({});
