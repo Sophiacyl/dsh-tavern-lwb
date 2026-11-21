@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.13 — 2026-11-21
+
+- Reject sparse arrays and oversized containers before numeric plot-log traversal; add cyclic/sparse direct-input regression checks.
+- Preserve the explicit strict-subset compatibility boundaries from beta.12.
+
 ## 0.1.0-beta.12 — 2026-11-21
 
 - Add explicit numeric-leaf plot-log conversion against an unguarded, already owned baseline; require one strict JSON block and disjoint set/bump paths.

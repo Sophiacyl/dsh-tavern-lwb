@@ -10,6 +10,8 @@ function boundedCopy(input) {
     if (value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) return value;
     if (!value || typeof value !== 'object' || (!Array.isArray(value) && !plain(value)) || seen.has(value)) fail('plot-log只接受无循环的普通JSON结构。');
     seen.add(value);
+    if (Array.isArray(value) && (value.length > 128 || Object.keys(value).length !== value.length)) fail('plot-log数组超限或包含空洞。');
+    if (typeof value === 'object' && !Array.isArray(value) && Reflect.ownKeys(value).length > 4000) fail('plot-log对象字段超限。');
     const out = Array.isArray(value) ? [] : Object.create(null);
     for (const key of Reflect.ownKeys(value)) {
       if (Array.isArray(value) && key === 'length') continue;

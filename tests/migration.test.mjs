@@ -25,6 +25,8 @@ test('plot-log subset rejects semantic ambiguity instead of guessing', () => {
   assert.throws(() => replayNumericPlotLog(base, [{ set: deep }]), { code: 'LWB_PLOT_SUBSET' });
   let called = false; const getter = {}; Object.defineProperty(getter, 'set', { enumerable: true, get() { called = true; return {}; } });
   assert.throws(() => replayNumericPlotLog(base, [getter])); assert.equal(called, false);
+  const sparse = new Array(1); assert.throws(() => replayNumericPlotLog(base, sparse), { code: 'LWB_PLOT_SUBSET' });
+  const cyclic = {}; cyclic.set = cyclic; assert.throws(() => replayNumericPlotLog(base, [cyclic]), { code: 'LWB_PLOT_SUBSET' });
 });
 test('Bridge backup preserves values and readonly rules without executing them', () => {
   let engine = applyText(emptyEngine(), initial).engine;
