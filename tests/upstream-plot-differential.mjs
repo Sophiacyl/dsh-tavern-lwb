@@ -70,6 +70,10 @@ cases.push(
 for (const value of ['+2', ' -2.75 ', '.5', '2.', '-.5e1', '1E+2', '1e-300', '-0']) {
   cases.push([10, [{ ...set(20), ...bump(value), adjust: bump('0.25').bump }]]);
 }
+for (const value of ['0', '-0', '42', ' -2.50 ', '0.00007', '9007199254740993']) {
+  cases.push([10, [{ record: set(value).set }]]);
+  cases.push([10, [{ ...set(20), 記下: set(value).set }, bump('0.25')]]);
+}
 let seed = 0x1302c03;
 const random = limit => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % limit; };
 const values = [0, 1, -1, 0.1, 1e20, -1e20, 1e-200, -1e-200, 2 ** 53, 3.5];

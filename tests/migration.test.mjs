@@ -82,7 +82,17 @@ test('plot-log accepts explicit decimal bump strings without enabling custom ali
   for (const value of ['', '  ', '0x10', '0b10', '1e999', '增加', true, null]) {
     assert.throws(() => replayNumericPlotLog(base, [{ bump: { 数据: { 金币: value } } }]), { code: 'LWB_PLOT_SUBSET' });
   }
-  assert.throws(() => replayNumericPlotLog(base, [{ set: { 数据: { 金币: '2' } } }]), { code: 'LWB_PLOT_SUBSET' });
+});
+test('plot-log set only accepts strings that upstream parses as decimal JSON numbers', () => {
+  const base = applyText(emptyEngine(), initial).engine;
+  const set = value => ({ set: { 数据: { 金币: value } } });
+  const engine = replayNumericPlotLog(base, [set(' -2.50 ')]);
+  assert.equal(engine.variables.数据.金币, -2.5);
+  assert.deepEqual(engine.LWB_RULES_V2, { '数据.金币': { typeLock: 'number' } });
+  for (const value of ['01', '-00.5', '+2', '.5', '2.', '1e2', '0x10', 'true', 'null', '', '9'.repeat(400)]) {
+    assert.throws(() => replayNumericPlotLog(base, [set(value)]), { code: 'LWB_PLOT_SUBSET' });
+  }
+  assert.equal(base.variables.数据.金币, 10);
 });
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;

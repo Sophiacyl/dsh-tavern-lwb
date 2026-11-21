@@ -86,7 +86,9 @@ export function replayNumericPlotLog(base, blocks) {
         // Upstream coerces bump payloads through Number. Accept only explicit
         // decimal notation here, not empty strings, radix prefixes or aliases.
         if (kind === 'bump' && typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(value.trim())) value = Number(value);
-        if (path.length < 2 || typeof value !== 'number' || !Number.isFinite(value)) fail('仅支持已有数值叶；bump可用有限十进制数字字符串，不接受根赋值、数组或空值。');
+        // parseValueForSet also requires valid JSON, excluding leading zeros.
+        if (kind === 'set' && typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value.trim())) value = JSON.parse(value.trim());
+        if (path.length < 2 || typeof value !== 'number' || !Number.isFinite(value)) fail('仅支持已有数值叶及相应的有限数值字符串，不接受根赋值、数组或空值。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');

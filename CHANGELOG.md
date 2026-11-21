@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.27
+
+- Accept finite decimal strings for numeric plot-log set only when the pinned upstream would parse them as numbers; keep the set and bump string grammars distinct.
+
 ## 0.1.0-beta.26
 
 - Accept an explicitly supplied single-message `source` instead of pre-extracted `blocks` in numeric plot-log migration. Require matched, attribute-free tags and strict JSON; reject malformed messages without partial replay. Do not scan live history.
