@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.42
+
+- Refuse legacy plot-log and varevent markers in both State2 history initialization and replay, including the case and spacing accepted by upstream plus incomplete markers. Never silently replay only the State2 portion of mixed input.
+
 ## 0.1.0-beta.41
 
 - Replay plot-log set on existing managed boolean roots. Compare against upstream persisted string values while preserving boolean values and type locks in Bridge snapshots.

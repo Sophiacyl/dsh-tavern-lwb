@@ -388,5 +388,11 @@ test('bounded history replay applies strict state blocks without changing source
   assert.deepEqual(result.report.map(row => row.status), ['success', 'noop']);
   assert.throws(() => replayStateHistory(initial, [{ turn: 2, rawText: '<state>损坏语句</state>' }]), { code: 'LWB_MIGRATION' });
   assert.throws(() => replayStateHistory(initial, Array(101).fill(rows[0])), { code: 'LWB_MIGRATION' });
-  for (const rawText of ['<plot-log>{"set":{}}</plot-log>', '<varevent>condition: true</varevent>']) assert.throws(() => replayStateHistory(initial, [{ turn: 2, rawText }]), { code: 'LWB_MIGRATION' });
+  for (const marker of [
+    '<plot-log>{"set":{}}</plot-log>', '<varevent>condition: true</varevent>', '< PLOT-LOG >{}</ PLOT-LOG >',
+    '< VAREVENT >x</ VAREVENT >', '< plot-log-extra>', '< / plot-log>', '<\n varevent',
+  ]) {
+    assert.throws(() => replayStateHistory(initial, [{ turn: 2, rawText: '<state>数据.金币: +1</state>' + marker }]), { code: 'LWB_MIGRATION', message: /第2轮.*旧协议/ });
+    assert.throws(() => replayStateHistory('<state>数据.金币: 10</state>' + marker, []), { code: 'LWB_MIGRATION', message: /初始化文本.*旧协议/ });
+  }
 });

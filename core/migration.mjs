@@ -131,15 +131,19 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
   if (branchMap.length && onSelection) onSelection(branchMap);
   return engine;
 }
+// Match the pinned legacy tag prefixes, including spacing accepted by the
+// upstream readers. Refuse incomplete markers too: never silently drop them.
+const legacyHistoryTag = /<\s*\/?\s*(?:plot-log|varevent\b)/iu;
 export function replayStateHistory(initialText, materials) {
   if (!Array.isArray(materials) || materials.length > 100) fail('历史回放每次最多100轮。');
+  if (typeof initialText === 'string' && legacyHistoryTag.test(initialText)) fail('初始化文本包含plot-log或varevent旧协议，不能作为State2无损回放。');
   let result = applyText(emptyEngine(), initialText);
   if (result.status !== 'success' || !result.engine.roots.length) fail('历史回放需要有效初始化文本。');
   let engine = result.engine, total = 0; const report = [];
   for (const material of materials) {
     const text = material.rawText;
     if (typeof text !== 'string' || (total += Buffer.byteLength(text)) > 256 * 1024) fail('历史原文缺失或总量超过256 KiB。');
-    if (/<\/?(?:plot-log|varevent)\b/iu.test(text)) fail('第' + material.turn + '轮包含plot-log或varevent旧协议，不能作为State2无损回放。');
+    if (legacyHistoryTag.test(text)) fail('第' + material.turn + '轮包含plot-log或varevent旧协议，不能作为State2无损回放。');
     result = applyText(engine, text, { requireBlocks: true });
     if (!['success', 'noop'].includes(result.status)) fail('第' + material.turn + '轮不能完整回放：' + (result.errors[0]?.message || result.status));
     engine = result.engine;
