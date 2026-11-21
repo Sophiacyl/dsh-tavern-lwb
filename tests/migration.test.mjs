@@ -135,8 +135,15 @@ test('plot-log push deduplicates numeric items and requires explicit array growt
   assert.deepEqual(grown.LWB_RULES_V2, LWB_RULES_V2);
   assert.deepEqual(replayNumericPlotLog({ ...base, LWB_RULES_V2: { 'R.a': { arrayGrow: true, ro: true } } }, blocks).variables.R.a, [1, 1, 2]);
   assert.deepEqual(base.variables.R.a, [1, 1, 2]);
-  for (const a of [[], [null], ['3'], [[3]]]) assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a } } }]), { code: 'LWB_PLOT_SUBSET' });
+  for (const a of [[], [null], [{}], [[3]]]) assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a } } }]), { code: 'LWB_PLOT_SUBSET' });
   assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a: Array(128).fill(1) } }, bump: { R: { n: 1 } } }]), { code: 'LWB_PLOT_SUBSET' });
+});
+test('plot-log push preserves scalar types and does not parse strings', () => {
+  const base = { variables: { R: { a: [1, '1', false, false] } }, roots: ['R'], LWB_RULES_V2: { 'R.a': { arrayGrow: true } } };
+  const result = replayNumericPlotLog(base, [{ push: { R: { a: [false, 'false', '2', 2, true, ' 1 ', ''] } } }]);
+  assert.deepEqual(result.variables.R.a, [1, '1', false, false, 'false', '2', 2, true, ' 1 ', '']);
+  assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
+  assert.deepEqual(base.variables.R.a, [1, '1', false, false]);
 });
 test('plot-log JSON arrays combine entries within one block, not across blocks', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;

@@ -169,10 +169,13 @@ const arrayCases = [
   [{ arrayGrow: false }, [push(3), bump(2)]],
   [{ arrayGrow: true, ro: true }, [push(3)]],
   [null, [push(3)]],
+  [{ arrayGrow: true }, [push([1, '1', true, 'true', false, '', ' 1 ']), push('1')], [1, false]],
+  [{ arrayGrow: true }, [push(false), push('false')], []],
+  [{ arrayGrow: true, ro: true }, [push('new'), bump(2)], ['old', true]],
 ];
-for (const [rule, blocks] of arrayCases) {
+for (const [rule, blocks, initial = [1, 1]] of arrayCases) {
   const path = '数据.清单';
-  const base = { variables: { 数据: { 清单: [1, 1], 金币: 10 } }, roots: ['数据'], LWB_RULES_V2: rule ? { [path]: rule } : {} };
+  const base = { variables: { 数据: { 清单: initial, 金币: 10 } }, roots: ['数据'], LWB_RULES_V2: rule ? { [path]: rule } : {} };
   const source = sourceFor(blocks);
   synthetic.reset(source, { 数据: JSON.stringify(base.variables.数据) });
   upstream.rulesSetTable(rule ? { [path]: { typeLock: rule.typeLock ?? 'unknown', arrayPolicy: rule.arrayGrow ? 'grow' : 'lock', ro: rule.ro } } : {});

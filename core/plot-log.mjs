@@ -57,7 +57,8 @@ export function parseNumericPlotLogSource(source) {
   if (start !== null || !blocks.length) fail('需要1至16个闭合plot-log块。');
   return blocks;
 }
-const numericArray = value => Array.isArray(value) && value.every(Number.isFinite);
+const scalarArray = value => Array.isArray(value) && value.every(item =>
+  Number.isFinite(item) || typeof item === 'string' || typeof item === 'boolean');
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
   // Only exact numeric leaves can carry this subset of v1 guards.
@@ -70,11 +71,11 @@ export function replayNumericPlotLog(base, blocks) {
       }
       leaf = leaf[key];
     }
-    const array = numericArray(leaf);
+    const array = scalarArray(leaf);
     const fields = array ? ['typeLock', 'arrayGrow', 'ro'] : ['typeLock', 'min', 'max', 'step', 'ro'];
     if (Object.keys(rule).some(key => !fields.includes(key)) ||
         (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== (array ? 'array' : 'number')) || keys.length < 2 ||
-        !engine.roots.includes(keys[0]) || (!array && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值叶和数值数组的明确规则。');
+        !engine.roots.includes(keys[0]) || (!array && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值叶和标量数组的明确规则。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -110,13 +111,13 @@ export function replayNumericPlotLog(base, blocks) {
         // parseValueForSet also requires valid JSON, excluding leading zeros.
         if (kind === 'set' && typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value.trim())) value = JSON.parse(value.trim());
         const incoming = kind === 'push' ? (Array.isArray(value) ? value : [value]) : null;
-        if (path.length < 2 || (incoming ? !incoming.length || !numericArray(incoming) : !Number.isFinite(value))) fail('仅支持已有数值叶的set/bump，或已有数值数组的有限数字push。');
+        if (path.length < 2 || (incoming ? !incoming.length || !scalarArray(incoming) : !Number.isFinite(value))) fail('仅支持已有数值叶的set/bump，或已有标量数组的数字、字符串或布尔值push。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');
           current = current[key];
         }
-        if (!engine.roots.includes(path[0]) || (incoming ? !numericArray(current) : !Number.isFinite(current))) fail('字段必须属于已托管且匹配操作类型的数值基线。');
+        if (!engine.roots.includes(path[0]) || (incoming ? !scalarArray(current) : !Number.isFinite(current))) fail('字段必须属于已托管且匹配操作类型的数值基线。');
         count += incoming?.length ?? 1;
         if (count > 128) fail('同一条消息最多128个操作或待追加项。');
         const identity = path.join('.');

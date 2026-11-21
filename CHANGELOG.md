@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.34
+
+- Extend plot-log push to existing managed arrays of finite numbers, strings and booleans. Keep scalar types distinct during deduplication and preserve string text as-is.
+
 ## 0.1.0-beta.33
 
 - Replay push into existing managed finite-number arrays only. An explicit array growth rule permits appending missing items in input order, without removing existing duplicates; locked and readonly arrays skip otherwise valid writes.
