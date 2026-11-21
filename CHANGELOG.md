@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-beta.11 — 2026-11-21
+
+- Add explicit bounded upstream State2 message-WAL replay into a confirmed current baseline, retaining text/call order and declared root scope.
+- Validate internal operations and fingerprints; reject entries that cannot fully execute under Bridge's stricter constraints rather than silently importing partial state.
+- Do not migrate original floor identities, all swipe branches, checkpoints or executable legacy protocols.
+- Add root-claim ordering, internal pop, malformed-record and readonly rejection regressions.
+
 ## 0.1.0-beta.10 — 2026-11-21
 
 - Add explicit preview/confirmation for Bridge state backup restoration and selected-root upstream current snapshots, preserving readonly rules.

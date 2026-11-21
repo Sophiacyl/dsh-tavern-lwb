@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-import { validateEngine, emptyEngine, applyText } from './index.mjs';
+import { validateEngine, emptyEngine, applyText, applyRecordedEntry } from './index.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_MIGRATION' }); };
 export function parseStateBackup(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 64 * 1024) fail('状态备份必须为不超过64 KiB的JSON文本。');
@@ -29,7 +29,21 @@ export function parseStateBackup(text) {
     }
     if (!raw.LWB_RULES_V2 || typeof raw.LWB_RULES_V2 !== 'object' || Array.isArray(raw.LWB_RULES_V2)) fail('上游快照缺少明确规则表；不从值推断约束。');
     candidate = { variables, roots: raw.roots, LWB_RULES_V2: raw.LWB_RULES_V2 };
-  } else fail('仅接受Bridge导出包或显式上游当前快照封装；不接受整个聊天metadata、WAL、检查点或脚本。');
+  } else if (raw.spec === 'dsh-tavern-lwb/upstream-wal' && raw.version === 1) {
+    if (!Array.isArray(raw.records) || !raw.records.length || raw.records.length > 100) fail('WAL必须为1至100条按楼层排序的消息记录。');
+    let engine = emptyEngine(), entries = 0;
+    for (const record of raw.records) {
+      if (record === null) continue;
+      if (!record || record.v !== 1 || !Array.isArray(record.entries) || Object.keys(record).some(key => !['v', 'entries'].includes(key))) fail('WAL消息记录格式无效。');
+      for (const entry of record.entries) {
+        if (++entries > 128) fail('WAL回放最多128个entry。');
+        engine = applyRecordedEntry(engine, entry);
+      }
+    }
+    const owned = new Set(engine.roots);
+    for (const path of Object.keys(engine.LWB_RULES_V2)) if (!owned.has(path.split(/[.\[]/u)[0])) delete engine.LWB_RULES_V2[path];
+    candidate = engine;
+  } else fail('仅接受Bridge导出包、显式当前快照或State2消息WAL封装；不接受整个聊天metadata、检查点或脚本。');
   const engine = validateEngine(candidate);
   if (!engine.roots.length || !Object.keys(engine.variables).length) fail('状态备份没有可恢复的变量。');
   return engine;

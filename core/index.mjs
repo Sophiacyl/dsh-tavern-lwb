@@ -109,6 +109,45 @@ export function emptyEngine() { return { variables: {}, LWB_RULES_V2: {}, roots:
 // Explicit migration boundary: throws on invalid input rather than returning an empty fallback.
 export function validateEngine(input) { return checkEngine(input); }
 
+// Replay an explicitly scoped upstream WAL entry through the same bounded executor.
+export function applyRecordedEntry(input, entry) {
+  const original = checkEngine(input), value = snapshot(entry);
+  if (!plain(value)) fail('invalid_record', 'WAL条目结构无效');
+  if (value.rules === undefined) value.rules = [];
+  if (value.blocks === undefined) value.blocks = [];
+  if (!['text', 'call'].includes(value.kind) || !Array.isArray(value.rules) || !Array.isArray(value.ops) || !Array.isArray(value.roots) || !Array.isArray(value.blocks)) fail('invalid_record', 'WAL条目结构无效');
+  if (Object.keys(value).some(key => !['kind', 'source', 'blocks', 'rules', 'ops', 'roots'].includes(key))) fail('invalid_record', 'WAL条目包含未知字段');
+  if (value.source !== undefined && !['text', 'json'].includes(value.source)) fail('invalid_record', 'WAL来源无效');
+  if (value.blocks.some(block => typeof block !== 'string' || !/^[0-9a-f]{16}$/u.test(block))) fail('invalid_record', 'WAL正文指纹无效');
+  if (value.rules.length > LIMITS.rules || value.ops.length > LIMITS.operations) fail('operation_limit', 'WAL单条操作或规则超限');
+  const claims = new Set(value.roots);
+  for (const root of claims) if (checkPath(root).length !== 1) fail('invalid_record', 'WAL托管根无效');
+  if (claims.size !== value.roots.length) fail('invalid_record', 'WAL托管根重复');
+  for (const item of value.rules) {
+    if (!plain(item) || Object.keys(item).some(key => !['path', 'rule'].includes(key))) fail('invalid_record', 'WAL规则结构无效');
+    checkPath(item.path, true); checkRule(item.rule);
+  }
+  for (const op of value.ops) {
+    if (!plain(op) || !['text', 'json'].includes(op.source) || !['set', 'inc', 'push', 'pop', 'del'].includes(op.op)) fail('invalid_record', 'WAL操作或来源无效');
+    const allowed = ['path', 'op', 'source', ...(op.op === 'inc' ? ['delta'] : op.op === 'del' ? [] : ['value'])];
+    if (Object.keys(op).some(key => !allowed.includes(key)) || (op.op !== 'del' && !Object.hasOwn(op, op.op === 'inc' ? 'delta' : 'value'))) fail('invalid_record', 'WAL操作字段无效');
+    const root = String(checkPath(op.path)[0]);
+    if (!claims.has(root) && !original.roots.includes(root)) fail('invalid_record', 'WAL操作未声明托管根，不能无损迁移');
+    if (op.op === 'inc' && (typeof op.delta !== 'number' || !Number.isFinite(op.delta))) fail('invalid_delta', 'WAL增量无效');
+  }
+  validateJsonBatch(value.ops);
+  const next = checkEngine(original), owned = new Set(next.roots);
+  const result = executeStateOperations(next, value.rules, value.ops, { memory: true, report: true, ownedRoots: owned, claimRoots: claims,
+    validatePayload: item => snapshot(item), boundary() {
+      for (const root of Object.keys(next.variables)) if (next.variables[root] === undefined) delete next.variables[root];
+      next.roots = [...owned]; checkEngine(next);
+    } });
+  if (result.errors.length) fail('invalid_record', 'WAL包含无法完整执行的操作，不迁移部分结果');
+  for (const root of claims) owned.add(root);
+  next.roots = [...owned];
+  return checkEngine(next);
+}
+
 function scanBlocks(text) {
   const blocks = [];
   const pattern = /<\/?state(?=[\s/>]|$)/giu;
