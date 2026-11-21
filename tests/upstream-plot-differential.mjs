@@ -7,6 +7,7 @@ import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { replayNumericPlotLog } from '../core/plot-log.mjs';
+import { parseStateBackup } from '../core/migration.mjs';
 
 assert.ok(process.env.LWB_UPSTREAM_ROOT, 'Set LWB_UPSTREAM_ROOT to the public checkout');
 const root = realpathSync(process.env.LWB_UPSTREAM_ROOT);
@@ -82,11 +83,13 @@ for (let i = 0; i < 128; i++) {
 }
 for (const [index, [initial, blocks]] of cases.entries()) {
   const base = { variables: { 数据: { 金币: initial, 深层: { 生命: 50 } } }, roots: ['数据'], LWB_RULES_V2: {} };
-  const text = blocks.map(block => `<plot-log>\n${JSON.stringify(block)}\n</plot-log>`).join('\n');
+  const text = '前' + blocks.map((block, i) => i % 2 ? `< PLOT-LOG >\r\n${JSON.stringify(block)}\r\n</ PLOT-LOG >` : `<plot-log>\n${JSON.stringify(block)}\n</plot-log>`).join('\n中\n') + '后';
   synthetic.reset(text, { 数据: JSON.stringify(base.variables.数据) });
   upstream.rulesSetTable({});
   await upstream.applyVariablesForMessage(0);
   const result = replayNumericPlotLog(base, blocks);
+  const imported = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source: text }));
+  assert.deepEqual(imported, result, `case ${index}: raw-message import vs structured blocks`);
   const meta = synthetic.getContext().chatMetadata;
   assert.ok(meta.LWB_PLOT_APPLIED_KEY?.[0], `case ${index} did not reach upstream settlement`);
   assert.deepEqual(result.variables.数据, JSON.parse(meta.variables.数据), `case ${index}: values`);

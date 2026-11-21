@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.26
+
+- Accept an explicitly supplied single-message `source` instead of pre-extracted `blocks` in numeric plot-log migration. Require matched, attribute-free tags and strict JSON; reject malformed messages without partial replay. Do not scan live history.
+
 ## 0.1.0-beta.25
 
 - Accept explicit finite decimal strings as numeric plot-log bump deltas, including signs, fractions and exponents. Keep other string forms outside the subset.

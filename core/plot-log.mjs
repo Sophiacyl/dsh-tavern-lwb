@@ -29,6 +29,33 @@ function boundedCopy(input) {
   }
   return visit(input, 0);
 }
+// Explicit single-message import only. This does not scan live Tavern history.
+export function parseNumericPlotLogSource(source) {
+  if (typeof source !== 'string' || Buffer.byteLength(source) > 32 * 1024) fail('plot-log原文须为不超过32 KiB的单条消息。');
+  // Also detect tag lookalikes: upstream's opening pattern accepts this prefix.
+  const tags = /<\s*(\/?)\s*plot-log/giu;
+  const blocks = [];
+  let start = null;
+  for (const tag of source.matchAll(tags)) {
+    const boundary = tag.index + tag[0].length;
+    const suffix = /^\s*>/u.exec(source.slice(boundary));
+    if (!suffix) fail('plot-log原文仅接受不带属性的完整开关标签。');
+    if (!tag[1]) {
+      if (start !== null) fail('plot-log原文不接受嵌套块。');
+      start = boundary + suffix[0].length;
+      continue;
+    }
+    if (start === null) fail('plot-log原文存在未配对的结束标签。');
+    if (blocks.length === 16) fail('同一消息最多16个plot-log块。');
+    let block;
+    try { block = JSON.parse(source.slice(start, tag.index)); }
+    catch { fail('plot-log块必须为严格JSON，不回放部分消息。'); }
+    blocks.push(block);
+    start = null;
+  }
+  if (start !== null || !blocks.length) fail('需要1至16个闭合plot-log块。');
+  return blocks;
+}
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
   if (Object.keys(engine.LWB_RULES_V2).length) fail('旧plot-log数值子集不迁移守卫规则；请使用无约束的明确基线。');

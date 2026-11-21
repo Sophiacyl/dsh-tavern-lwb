@@ -13,6 +13,22 @@ test('v1 numeric plot-log converts disjoint numeric fields', () => {
   const packed = JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, blocks });
   assert.deepEqual(parseStateBackup(packed), engine);
 });
+test('explicit raw plot-log migration applies ordered strict JSON blocks only', () => {
+  const baseEngine = applyText(emptyEngine(), initial).engine;
+  const payload = { spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine };
+  const parse = fields => parseStateBackup(JSON.stringify({ ...payload, ...fields }));
+  const source = '前< PLOT-LOG >{"set":{"数据":{"金币":30}}}</ PLOT-LOG >中<plot-log>{"bump":{"数据":{"金币":"+2"}}}</plot-log>后';
+  assert.equal(parse({ source }).variables.数据.金币, 12);
+  for (const invalid of [
+    '', source + '<plot-log>', '</plot-log>' + source, '<plot-log/>' + source,
+    '<plot-log-extra>' + source, '<plot-log a="b">' + source,
+    '<plot-log>' + source + '</plot-log>', source + '<plot-log>{bump:{}}</plot-log>',
+    source.repeat(9), '甲'.repeat(11000) + source,
+  ]) assert.throws(() => parse({ source: invalid }), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => parse({ source, blocks: [] }), { code: 'LWB_MIGRATION' });
+  assert.throws(() => parse({ source, unexpected: true }), { code: 'LWB_MIGRATION' });
+  assert.equal(baseEngine.variables.数据.金币, 10);
+});
 test('same-message plot-log blocks replay in order using persisted numeric base for each bump', () => {
   const base = applyText(emptyEngine(), '数据.金币: 10\n数据.生命值: 100').engine;
   const engine = replayNumericPlotLog(base, [

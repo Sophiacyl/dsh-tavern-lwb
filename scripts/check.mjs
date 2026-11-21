@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { ROOT, releaseFiles } from './files.mjs';
 const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
 assert.equal(pkg.name, 'dsh-tavern-lwb');
-assert.equal(pkg.version, '0.1.0-beta.25');
+assert.equal(pkg.version, '0.1.0-beta.26');
 assert.ok(!pkg.dependencies && !pkg.optionalDependencies && !pkg.peerDependencies);
 assert.equal(pkg.exports['.'], './index.mjs');
 assert.equal(pkg.exports['./client'], './client.js');
