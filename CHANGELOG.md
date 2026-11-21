@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.37
+
+- Accept plain JSON object items in explicit plot-log push lists for existing managed arrays. Preserve upstream reference-based matching instead of deduplicating distinct objects by content. Continue rejecting direct nested array items.
+
 ## 0.1.0-beta.36
 
 - Preserve literal JSON null in plot-log push into existing managed root or nested scalar arrays. Deduplicate null separately from the string "null"; numeric set/bump behavior is unchanged.

@@ -135,7 +135,7 @@ test('plot-log push deduplicates numeric items and requires explicit array growt
   assert.deepEqual(grown.LWB_RULES_V2, LWB_RULES_V2);
   assert.deepEqual(replayNumericPlotLog({ ...base, LWB_RULES_V2: { 'R.a': { arrayGrow: true, ro: true } } }, blocks).variables.R.a, [1, 1, 2]);
   assert.deepEqual(base.variables.R.a, [1, 1, 2]);
-  for (const a of [[], [{}], [[3]]]) assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a } } }]), { code: 'LWB_PLOT_SUBSET' });
+  for (const a of [[], [[3]]]) assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a } } }]), { code: 'LWB_PLOT_SUBSET' });
   assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a: Array(128).fill(1) } }, bump: { R: { n: 1 } } }]), { code: 'LWB_PLOT_SUBSET' });
 });
 test('plot-log push preserves scalar types and does not parse strings', () => {
@@ -168,6 +168,15 @@ test('plot-log push accepts null as a literal array item, distinct from the stri
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.deepEqual(base.variables.Q, []);
   assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { a: null } } }]), { code: 'LWB_PLOT_SUBSET' });
+});
+test('plot-log push requires explicit list wrapping for JSON object items and retains equal-by-content objects', () => {
+  const base = { variables: { R: { a: [{ name: 'a' }] }, Q: [] }, roots: ['R', 'Q'], LWB_RULES_V2: { 'R.a': { arrayGrow: true }, Q: { arrayGrow: true } } };
+  const result = replayNumericPlotLog(base, [{ push: { R: { a: [{ name: 'a' }, { name: 'a' }] }, Q: [{ data: [1, null] }, { data: [1, null] }] } }]);
+  assert.deepEqual(result.variables.R.a, [{ name: 'a' }, { name: 'a' }, { name: 'a' }]);
+  assert.deepEqual(result.variables.Q, [{ data: [1, null] }, { data: [1, null] }]);
+  assert.deepEqual(base.variables.Q, []);
+  assert.throws(() => replayNumericPlotLog(base, [{ push: { Q: { name: 'a' } } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog(base, JSON.parse('[{"push":{"Q":[{"__proto__":1}]}}]')), { code: 'LWB_PLOT_SUBSET' });
 });
 test('plot-log JSON arrays combine entries within one block, not across blocks', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;

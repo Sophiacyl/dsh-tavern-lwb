@@ -174,6 +174,9 @@ const arrayCases = [
   [{ arrayGrow: true, ro: true }, [push('new'), bump(2)], ['old', true]],
   [{ arrayGrow: true }, [push(null), push(['null', null, 1])], [null, null]],
   [{ arrayGrow: true }, [push([null, false, null])], []],
+  [{ arrayGrow: true }, [push([{ a: 1 }, { a: 1 }])], [{ a: 1 }]],
+  [{ arrayGrow: true }, [push([{ a: [1, null] }, 2]), push([{ a: [1, null] }, 2])], []],
+  [{ arrayGrow: true, ro: true }, [push([{ a: true }]), bump(1)], [{ a: false }]],
 ];
 for (const [rule, blocks, initial = [1, 1]] of arrayCases) {
   const path = '数据.清单';
@@ -197,6 +200,7 @@ const rootCases = [
   [{ arrayGrow: true, ro: true }, ['old'], [rootPush('new')]],
   [null, [false], [rootPush(true)]],
   [{ arrayGrow: true }, [], [rootPush(null), rootPush([null, 'null'])]],
+  [{ arrayGrow: true }, [{ a: 1 }], [rootPush([{ a: 1 }, { a: 1 }])]],
 ];
 for (const [rule, initial, blocks] of rootCases) {
   const base = { variables: { 清单: initial }, roots: ['清单'], LWB_RULES_V2: rule ? { 清单: rule } : {} };
