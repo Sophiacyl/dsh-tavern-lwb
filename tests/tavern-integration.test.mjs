@@ -214,6 +214,26 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 1 }), { turn: 1, textVersion: 'greeting', data: { backfill: true } });
   await assert.rejects(historyApi.saveTurnData({ gameId, turn: 1, textVersion: 'hidden-swipe', data: {} }), { code: 'TAVERN_PLUGIN_STALE_VERSION' });
   await assert.rejects(historyApi.saveTurnData({ gameId, turn: 3, data: {} }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
+  // A version conflict on the second write does not roll back the first.
+  const current = await historyApi.getTurn({ gameId, turn: 2 });
+  assert.equal(current.textVersion, 'reply-v1');
+  await assert.rejects(historyApi.saveTurnData({ gameId, turn: 2, textVersion: 'stale-reply', data: { backfill: false } }), { code: 'TAVERN_PLUGIN_STALE_VERSION' });
+  assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 2 }), { turn: 1, textVersion: 'greeting', data: { backfill: true } }, 'read at turn 2 falls back to the committed prefix, not an exact row');
+  await historyApi.saveTurnData({ gameId, turn: 2, textVersion: current.textVersion, data: { backfill: 'second' } });
+  assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 2 }), { turn: 2, textVersion: current.textVersion, data: { backfill: 'second' } });
+  assert.deepEqual(await historyApi.getTurn({ gameId, turn: 2 }), current);
+  const savedMaterial = latest;
+  try {
+    latest = { ...savedMaterial, key: 'reply-probe-edited' };
+    materials.set(2, latest);
+    assert.equal((await historyApi.getTurn({ gameId, turn: 2 })).textVersion, 'reply-probe-edited');
+    assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 2 }), { turn: 1, textVersion: 'greeting', data: { backfill: true } }, 'a version switch hides the previously committed second row');
+  } finally {
+    latest = savedMaterial;
+    materials.set(2, savedMaterial);
+  }
+  assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 2 }), { turn: 2, textVersion: current.textVersion, data: { backfill: 'second' } });
+  assert.equal((await call('memory/read')).record.revision, savedMemory, 'probe writes are isolated to their plugin owner');
   await assert.rejects(historyApi.editTurn({ gameId, turn: 1, textVersion: 'greeting', text: '不可回填的原生正文' }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
   await assert.rejects(historyApi.setVariables({ gameId, turn: 1, textVersion: 'greeting', variables: {} }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
   for (const name of ['gameForked', 'forkTurns', 'importGame']) assert.equal(historyApi[name], undefined, name + ' is not on the plugin service');
