@@ -65,6 +65,8 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await fiber.await();
   const call = (method, args = {}) => api.callHandler(plugin.name + '/' + method, { gameId: 'synthetic-game', ...args });
   assert.equal((await call('read')).enabled, false);
+  const inspected = await call('compat/varevent-inspect', { text: '<varevent>\n[event.test]\ndisplay: "检查"\njs_execute: "throw new Error()"\n</varevent>' });
+  assert.equal(inspected.eventCount, 1); assert.equal(inspected.executed, false);
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 2, input: '前进' })).length, 0);
   await call('enable', { enabled: true });
   const preview = await call('preview', { text: initial, expectedTextVersion: 'greeting' });

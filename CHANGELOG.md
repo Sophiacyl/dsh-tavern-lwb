@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.19 — 2026-11-21
+
+- Reuse the pinned upstream pure varevent document parser for an explicit inspect-only endpoint and panel action.
+- Display event fields and duplicate/script warnings within byte/block/event/field limits; never evaluate conditions, execute scripts or return a migration confirmation token for inspection.
+- Keep the full event trigger/execution runtime unsupported and document source provenance.
+
 ## 0.1.0-beta.18 — 2026-11-21
 
 - Normalize explicit legacy stateLogV2 root claims using the pinned upstream string/empty-filter semantics, deduplicate claims, and ignore valid empty rule declarations.

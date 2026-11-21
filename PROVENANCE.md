@@ -14,6 +14,7 @@ This independent third-party project is named **LWB Bridge**. It adapts selected
 | `vendor/state2/executor.js` | `modules/variables/state2/executor.js` | Same revision; per-execution rule factory and synchronous pre/post-operation boundaries |
 | `vendor/state2/guard-core.js` | `modules/variables/state2/guard-core.js` | Same revision; isolated rules, bounded wildcard search and ancestor/type/readonly validation |
 | `vendor/state2/semantic.js` | `modules/variables/state2/semantic.js` | Same revision; provenance header retained and standalone packaging |
+| `vendor/varevent-document.mjs` | `modules/variables/varevent/document.js` | Same pinned revision; unchanged pure document parser/serializer plus attribution header, no evaluator or host runtime |
 | `vendor/js-yaml.mjs` | `libs/js-yaml.mjs` (js-yaml 4.1.0) | Same source revision; bounded parsing, rejection of aliases/tags/unsafe keys; MIT license preserved |
 
 The exact upstream copyright, license and NOTICE are retained under `licenses/` and `vendor/`. All copied State2 sources have prominent modification headers. See [`vendor/README.md`](vendor/README.md) for technical changes.
