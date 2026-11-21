@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.43
+
+- Bind migration preview to the exact current turn as well as version; reject wrong-turn or missing raw history material with a stale error before confirmation writes.
+
 ## 0.1.0-beta.42
 
 - Refuse legacy plot-log and varevent markers in both State2 history initialization and replay, including the case and spacing accepted by upstream plus incomplete markers. Never silently replay only the State2 portion of mixed input.

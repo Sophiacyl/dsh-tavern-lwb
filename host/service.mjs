@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.42';
+export const VERSION = '0.1.0-beta.43';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -255,7 +255,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         const materials = []; let totalBytes = 0;
         for (let turn = from; turn <= to; turn++) {
           const material = await tavern.getTurn({ gameId, turn }); live();
-          if (!material || material.turn !== turn || !material.textVersion) fail('LWB_MIGRATION', '历史正文或版本缺失，停止回放。');
+          if (!material || material.turn !== turn || typeof material.textVersion !== 'string' || !material.textVersion) fail('LWB_MIGRATION', '历史正文或版本缺失，停止回放。');
           if (typeof material.rawText !== 'string' || (totalBytes += Buffer.byteLength(material.rawText)) > 256 * 1024) fail('LWB_MIGRATION', '历史原文缺失或总量超过256 KiB。');
           materials.push({ turn, textVersion: material.textVersion, rawText: material.rawText });
         }
@@ -263,7 +263,8 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         report = report.map((row, i) => ({ ...row, digest: digest(materials[i].rawText) }));
       } else fail('LWB_MIGRATION', '未知状态迁移模式。');
       recordData(engine, { status: 'success' }, 'migration', digest(JSON.stringify(engine)));
-      await current(gameId, expectedTextVersion);
+      const fresh = await current(gameId, expectedTextVersion);
+      if (fresh.turn !== state.turn) fail('LWB_STALE', '预览期间轮次已变化，请重新预览。');
       const token = randomUUID();
       for (const [key, value] of migrationPreviews) if (value.expires <= now()) migrationPreviews.delete(key);
       if (migrationPreviews.size >= 32) fail('LWB_MIGRATION', '迁移预览过多，请稍后重试。');
@@ -282,7 +283,7 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
       if ((old?.stateHash || null) !== draft.expectedHash) fail('LWB_PARENT_CHANGED', '预览后状态发生变化，请重新预览。');
       for (const row of draft.report.filter(row => typeof row.digest === 'string')) {
         const material = await tavern.getTurn({ gameId, turn: row.turn });
-        if (!material || material.textVersion !== row.textVersion || digest(material.rawText) !== row.digest) fail('LWB_STALE', '预览后历史正文已变化，请重新回放。');
+        if (!material || material.turn !== row.turn || material.textVersion !== row.textVersion || typeof material.rawText !== 'string' || digest(material.rawText) !== row.digest) fail('LWB_STALE', '预览后历史正文已变化，请重新回放。');
       }
       const fresh = await current(gameId, expectedTextVersion);
       if (fresh.turn !== draft.turn) fail('LWB_STALE', '提交前轮次已变化，请重新预览。');

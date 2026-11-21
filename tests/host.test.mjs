@@ -296,6 +296,33 @@ test('history replay rechecks all versions at confirmation and rejects cross-gam
   await assert.rejects(f.service.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true }), { code: 'LWB_STALE' });
 });
 
+test('history preview rejects a turn change even when the version string is reused', async () => {
+  const f = fixture(); await start(f);
+  f.show('a', 2, 'v2', '<state>数据.金币: +3</state>');
+  const original = f.tavern.getTurn;
+  f.tavern.getTurn = async args => { const material = await original(args); f.show('a', 3, 'v2'); return material; };
+  const before = structuredClone(f.documents);
+  await assert.rejects(f.service.migrationPreview({ gameId: 'a', expectedTextVersion: 'v2', mode: 'history', initialText: initial, from: 2, to: 2 }), { code: 'LWB_STALE' });
+  assert.deepEqual(f.documents, before);
+});
+
+test('history confirmation rejects a wrong source turn or missing raw text before writing', async () => {
+  const f = fixture(); await start(f);
+  f.show('a', 2, 'v2', '<state>数据.金币: +3</state>');
+  const args = { gameId: 'a', expectedTextVersion: 'v2' };
+  const p = await f.service.migrationPreview({ ...args, mode: 'history', initialText: initial, from: 2, to: 2 });
+  const original = f.tavern.getTurn;
+  const before = structuredClone(f.documents);
+  for (const override of [{ turn: 1 }, { rawText: undefined }]) {
+    f.tavern.getTurn = async input => ({ ...await original(input), ...override });
+    await assert.rejects(f.service.migrationCommit({ ...args, token: p.token, confirmReplace: true }), { code: 'LWB_STALE' });
+    assert.deepEqual(f.documents, before);
+  }
+  f.tavern.getTurn = original;
+  await f.service.migrationCommit({ ...args, token: p.token, confirmReplace: true });
+  assert.equal((await f.service.readEngine('a', 2)).variables.数据.金币, 3);
+});
+
 test('export is a separate explicit data export, unload cancels queued work', async () => {
   const f = fixture(); await start(f);
   const output = await f.service.exportState({ gameId: 'a' });
