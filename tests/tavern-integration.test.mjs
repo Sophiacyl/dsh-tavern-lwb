@@ -135,6 +135,28 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.deepEqual(await api.exportGame('synthetic-chat'), exported);
   await assert.rejects(call('migration-commit', { ...confirmArgs, confirmReplace: true }), { code: 'LWB_MIGRATION' });
   assert.deepEqual(await api.exportGame('synthetic-fork'), forkAfter);
+  const earlierRows = await data.turnsUpTo({ chatId: 'synthetic-fork', owner: plugin.name, turn: 1 });
+  assert.ok(earlierRows.some(row => row.key === 'fork-greeting'));
+  const batch = {
+    spec: 'dsh-tavern-lwb/plot-log-numeric-log', version: 1, baseEngine: migratedRecord.engine,
+    messages: [
+      { blocks: [{ bump: { 数据: { 角色: { 生命值: 2 } } } }] },
+      { source: '<plot-log>{"bump":{"数据":{"角色":{"生命值":"-7"}}}}</plot-log>' },
+    ],
+  };
+  const malformedBatch = { ...batch, messages: [...batch.messages, { source: '<plot-log>' }] };
+  await assert.rejects(call('migration-preview', { ...forkArgs, text: JSON.stringify(malformedBatch) }), { code: 'LWB_PLOT_SUBSET' });
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkAfter, 'invalid suffix must not persist partial results');
+  const batchPreview = await call('migration-preview', { ...forkArgs, text: JSON.stringify(batch) });
+  assert.equal(batchPreview.engine.variables.数据.角色.生命值, 88);
+  assert.deepEqual(batchPreview.engine.LWB_RULES_V2, migratedRecord.engine.LWB_RULES_V2);
+  assert.deepEqual(await api.exportGame('synthetic-fork'), forkAfter);
+  await call('migration-commit', { ...forkArgs, token: batchPreview.token, confirmReplace: true });
+  const batchRecord = (await call('read', forkArgs)).record;
+  assert.equal(batchRecord.parent, null);
+  assert.deepEqual(batchRecord.engine, batchPreview.engine);
+  assert.deepEqual(await data.turnsUpTo({ chatId: 'synthetic-fork', owner: plugin.name, turn: 1 }), earlierRows);
+  assert.deepEqual(await api.exportGame('synthetic-chat'), exported);
   assert.equal(modelCalls, 0);
   const previewMemory = await call('memory/preview', { text: JSON.stringify({ type: 'LittleWhiteBoxStorySummaryMemory', version: 1, data: memoryData }), expectedTextVersion: 'reply-v1' });
   await call('memory/import', { token: previewMemory.token, expectedTextVersion: 'reply-v1' });
@@ -184,7 +206,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await assert.rejects(call('read'), { code: 'TAVERN_PLUGIN_NOT_FOUND' });
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' })).length, 0);
   assert.ok(warnings.length > 0, 'invalid-only task reaches host error observation');
-  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect') || message.includes('handle:dsh-tavern-lwb/migration-commit')), JSON.stringify(warnings));
+  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect') || message.includes('handle:dsh-tavern-lwb/migration-commit') || message.includes('handle:dsh-tavern-lwb/migration-preview')), JSON.stringify(warnings));
 });
 
 test('Cordis waits for the plugin asynchronous cleanup before unload completes', async t => {
