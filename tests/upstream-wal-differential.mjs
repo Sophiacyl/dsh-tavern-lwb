@@ -67,4 +67,25 @@ for (const [name, entries] of cases) {
     checked++;
   } finally { replaceRules({}); }
 }
-console.log(JSON.stringify({ ok: true, pinned, checked, cases: cases.map(([name]) => name) }, null, 2));
+// Legacy conversion forces recorded operations to text and cleans explicit roots.
+let legacyChecked = 0;
+for (const claims of [['数据', '', '数据'], [], undefined]) {
+  replaceRules({});
+  const floors = {
+    '0': { signature: '', roots: claims, rules: [{ path: '数据', rule: {} }], ops: [set({ 金币: 10 })] },
+    '2': { signature: '', roots: ['数据'], rules: [], ops: [{ op: 'inc', path: '数据.金币', delta: 3, source: 'json' }] }
+  };
+  const meta = { variables: {}, LWB_RULES_V2: {} }, owned = new Set();
+  try {
+    for (const old of Object.values(floors)) {
+      const ops = old.ops.map(op => ({ ...op, source: 'text' }));
+      const roots = Array.isArray(old.roots) ? old.roots.map(String).filter(Boolean) : [...new Set([...old.rules, ...ops].map(item => item.path.split(/[.\[]/u)[0]))];
+      executeStateOperations(meta, old.rules, ops, { memory: true, report: true, ownedRoots: new Set(owned), claimRoots: new Set(roots) });
+      for (const root of roots) owned.add(root);
+    }
+    const expected = { variables: Object.fromEntries(Object.entries(meta.variables).filter(([key]) => owned.has(key))), LWB_RULES_V2: Object.fromEntries(Object.entries(meta.LWB_RULES_V2).filter(([key]) => owned.has(key.split('.')[0]))), roots: [...owned] };
+    const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/legacy-state-log', version: 1, log: { version: 1, floors } }));
+    assert.deepEqual(actual, expected, 'legacy roots ' + JSON.stringify(claims)); legacyChecked++;
+  } finally { replaceRules({}); }
+}
+console.log(JSON.stringify({ ok: true, pinned, checked, legacyChecked, cases: cases.map(([name]) => name) }, null, 2));
