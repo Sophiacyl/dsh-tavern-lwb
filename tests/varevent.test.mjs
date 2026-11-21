@@ -18,6 +18,13 @@ test('duplicate ids and fields are visible rather than silently treated as clean
   assert.ok(result.groups[0].events[0].warnings.some(text => text.includes('字段重复')));
   assert.ok(result.groups[0].events[1].warnings.some(text => text.includes('重复事件')));
 });
+test('multiline quote swallowing event headers is explicitly flagged for review', () => {
+  const result = inspectVarevent('<varevent>\n[event.a]\ndisplay: "unterminated\n[event.b]\ndisplay: "ok"\n</varevent>');
+  assert.equal(result.groups[0].sourceHeaderCount, 2);
+  assert.ok(result.groups[0].parsedHeaderCount < 2);
+  assert.ok(result.groups[0].warnings.some(text => text.includes('事件边界')));
+  assert.equal(result.executed, false);
+});
 test('event inspection enforces byte, block and field limits', () => {
   for (const input of ['', '<varevent>unclosed', '<varevent></varevent><varevent>unclosed', '<varevent><varevent></varevent></varevent>', '</varevent>', '<varevent/>', 'x'.repeat(32769), '<varevent></varevent>'.repeat(17), '<varevent>\n[event.a]\ndisplay: "' + 'x'.repeat(8001) + '"\n</varevent>']) assert.throws(() => inspectVarevent(input), { code: 'LWB_VAREVENT_INSPECT' });
 });

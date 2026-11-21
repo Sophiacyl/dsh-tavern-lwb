@@ -33,7 +33,11 @@ export function inspectVarevent(text) {
       if (js.trim()) warnings.push('js_execute含脚本，本插件未执行');
       return { id, condition, display, js_execute: js, warnings, executable: false };
     });
-    return { start: block.start, end: block.end, events };
+    const headers = [...block.inner.matchAll(/^\s*\[\s*event\.([^\]]+)\]\s*$/gimu)].length;
+    const parsedHeaders = events.filter(event => event.id).length;
+    const warnings = headers !== parsedHeaders
+      ? ['原文事件标题数与解析结果不同，可能是字段引号或多行内容影响事件边界；请人工核对。'] : [];
+    return { start: block.start, end: block.end, sourceHeaderCount: headers, parsedHeaderCount: parsedHeaders, warnings, events };
   });
   return { mode: 'inspect-only', eventCount: total, groups, evaluated: false, executed: false,
     message: '仅使用上游宽松文档解析语义展示结构，不是JS或字段引号完整性验证；不注册触发器、不替换提示词、不执行condition或js_execute。' };

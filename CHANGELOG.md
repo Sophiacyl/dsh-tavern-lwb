@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.20 — 2026-11-21
+
+- Show source and parsed event-header counts during varevent inspection and flag mismatches caused by multiline/unterminated field boundaries for manual review.
+- Keep upstream field parsing unchanged and continue to prohibit condition/script execution.
+
 ## 0.1.0-beta.19 — 2026-11-21
 
 - Reuse the pinned upstream pure varevent document parser for an explicit inspect-only endpoint and panel action.

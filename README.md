@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.19`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.20`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
@@ -76,7 +76,7 @@ State页的“状态恢复与历史回放”支持粘贴Bridge v1状态导出包
 
 旧版`plot-log`可人工提取严格JSON，使用显式数值子集封装：`{"spec":"dsh-tavern-lwb/plot-log-numeric","version":1,"baseEngine":完整Bridge引擎,"blocks":[{"set":{"数据":{"生命值":20}},"bump":{"数据":{"金币":-2}}}]}`。只允许无规则、已托管且已存在的数值叶字段，单个JSON块、每条路径只写一次、键不得以数字开头；set后bump重叠与多块输入会明确拒绝，防止消息前值语义差异。set映射为number类型锁；空对象/no-op也按更窄子集拒绝。固定先set后bump；不自动读取原文标签，不支持别名、宽松JSON/TOML/YAML、字符串增量、push/del/guard或复杂路径。预览确认后仅建立当前基线，不运行旧脚本。
 
-`varevent`只读检查：在状态恢复区的文本框粘贴包含闭合`varevent`标签的内容，点“只读检查varevent（不执行）”。复用固定上游文档解析器，展示id/condition/display/js_execute、重复字段/事件警告；最多32 KiB、16块、128事件、单字段8000字符。只展示普通文本，不求值条件、不执行脚本、不注册触发器，也不生成迁移确认token。标签配对严格检查，但字段沿用上游宽松解析；未闭合字段引号可能影响事件边界，不作为完整语法验证。此入口不替代事件运行时。
+`varevent`只读检查：在状态恢复区的文本框粘贴包含闭合`varevent`标签的内容，点“只读检查varevent（不执行）”。复用固定上游文档解析器，展示id/condition/display/js_execute、重复字段/事件警告；最多32 KiB、16块、128事件、单字段8000字符。只展示普通文本，不求值条件、不执行脚本、不注册触发器，也不生成迁移确认token。标签配对严格检查，但字段沿用上游宽松解析；未闭合字段引号可能影响事件边界；检查会展示原文/解析标题数并在不一致时警告，但不作为完整语法验证。此入口不替代事件运行时。
 
 **兼容边界**：API7/8没有公开宏注册/原生提示词转换接口，既有卡/世界书/历史的宏无法透明接入；目前仍只处理显式模板。`plot-log`仅支持上述显式数值子集，push去重、根删除与State2不同；`varevent`含JS条件和执行，不做无损自动转换；范围清单见本地第4步兼容报告。
 

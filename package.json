@@ -1,6 +1,6 @@
 {
   "name": "dsh-tavern-lwb",
-  "version": "0.1.0-beta.19",
+  "version": "0.1.0-beta.20",
   "description": "LWB Bridge：面向 flizzywine DSH Tavern 的第三方 State2 与便携记忆适配。Based on LittleWhiteBox by biex。",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
