@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.21 — 2026-11-21
+
+- Add an explicit static-display varevent preview for unambiguous events with no condition or script, selecting the last nonempty display in each block.
+- Reject conditional/scripted content instead of skipping it; return only text previews without storage writes, prompt injection or migration tokens.
+
 ## 0.1.0-beta.20 — 2026-11-21
 
 - Show source and parsed event-header counts during varevent inspection and flag mismatches caused by multiline/unterminated field boundaries for manual review.

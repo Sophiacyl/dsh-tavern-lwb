@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.20 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.21 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.20'
+    const VERSION = '0.1.0-beta.21'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
@@ -55,6 +55,7 @@ window.__ModuleLoader__.load({
         const ticket = ++epoch.current; setBusy(true); setError(''); setPreview(null)
         try {
           const value = mode === 'inspect' ? { inspection: await ui.callHost(NAME + '/compat/varevent-inspect', { gameId, text }) }
+            : mode === 'static' ? { inspection: await ui.callHost(NAME + '/compat/varevent-static-preview', { gameId, text }) }
             : await ui.callHost(NAME + '/migration-preview', { gameId, expectedTextVersion: snapshot.textVersion, mode, text, initialText: initial, from: Number(from), to: Number(to) })
           if (ticket === epoch.current) setPreview(value)
         } catch (e) { if (ticket === epoch.current) setError(errorText(e)) }
@@ -76,6 +77,7 @@ window.__ModuleLoader__.load({
         h('label', null, '状态备份JSON', h('textarea', { value: text, onChange: edit(setText), disabled: busy, style: styles.textarea, 'aria-label': '状态备份JSON' })),
         h('button', { onClick: () => act('backup'), disabled: !allowed || !text.trim(), style: styles.button }, '预览恢复状态'),
         h('button', { onClick: () => act('inspect'), disabled: !allowed || !text.trim(), style: styles.button }, '只读检查varevent（不执行）'),
+        h('button', { onClick: () => act('static'), disabled: !allowed || !text.trim(), style: styles.button }, '预览无条件事件显示（不执行）'),
         h('label', null, '回放初始化文本', h('textarea', { value: initial, onChange: edit(setInitial), disabled: busy, style: styles.textarea, 'aria-label': '回放初始化文本' })),
         h('div', { style: styles.row }, h('label', null, '回放起始轮', h('input', { type: 'number', value: from, onChange: edit(setFrom), disabled: busy })), h('label', null, '回放结束轮', h('input', { type: 'number', value: to, onChange: edit(setTo), disabled: busy }))),
         h('button', { onClick: () => act('history'), disabled: !allowed, style: styles.button }, '预览历史回放'),

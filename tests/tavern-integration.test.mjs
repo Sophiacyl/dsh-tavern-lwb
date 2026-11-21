@@ -70,6 +70,9 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.equal(inspected.eventCount, 1); assert.equal(inspected.executed, false);
   assert.equal(inspected.evaluated, false); assert.equal(Object.hasOwn(inspected, 'token'), false);
   assert.deepEqual(await api.exportGame('synthetic-chat'), beforeInspection, 'inspect endpoint must not change plugin storage');
+  const staticPreview = await call('compat/varevent-static-preview', { text: '前<varevent>\n[event.test]\ndisplay: "后"\n</varevent>' });
+  assert.equal(staticPreview.rendered, '前后'); assert.equal(staticPreview.token, null);
+  assert.deepEqual(await api.exportGame('synthetic-chat'), beforeInspection, 'static preview also leaves storage unchanged');
   assert.equal(modelCalls, 0);
   await assert.rejects(call('compat/varevent-inspect', { text: '<varevent></varevent><varevent>' }), { code: 'LWB_VAREVENT_INSPECT' });
   assert.deepEqual(await api.exportGame('synthetic-chat'), beforeInspection, 'failed inspection also leaves storage unchanged');

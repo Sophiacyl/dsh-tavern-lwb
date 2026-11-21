@@ -3,7 +3,7 @@
 import { createStateService } from './host/service.mjs';
 import { createRecordStore } from './host/records.mjs';
 import { createMemoryService, SUMMARY_TASK } from './host/memory-service.mjs';
-import { inspectVarevent } from './core/varevent.mjs';
+import { inspectVarevent, previewStaticVarevent } from './core/varevent.mjs';
 export const name = 'dsh-tavern-lwb';
 export const inject = ['tavern'];
 
@@ -22,6 +22,7 @@ export function apply(ctx) {
     'migration-preview': service.migrationPreview, 'migration-commit': service.migrationCommit };
   for (const [id, handler] of Object.entries(handlers)) tavern.handle(name + '/' + id, handler);
   tavern.handle(name + '/compat/varevent-inspect', ({ text } = {}) => inspectVarevent(text));
+  tavern.handle(name + '/compat/varevent-static-preview', ({ text } = {}) => previewStaticVarevent(text));
   tavern.turnSection({ name: 'state', position: 'after', text: service.prompt });
   tavern.settlementTask({ name: 'state', title: '小白状态', phase: 'after', run: service.automatic });
   const memoryHandlers = { read: memory.read, preview: memory.preview, import: memory.importMemory, export: memory.exportMemory,

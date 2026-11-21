@@ -1,6 +1,30 @@
 // LWB Bridge — Based on LittleWhiteBox by biex; see LICENSE.md.
 import { findVareventBlocks, parseEventBlock } from '../vendor/varevent-document.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_VAREVENT_INSPECT' }); };
+export function previewStaticVarevent(text) {
+  const inspected = inspectVarevent(text);
+  const blocks = findVareventBlocks(text);
+  const selections = inspected.groups.map((group, index) => {
+    const unsupported = () => fail('静态预览只接受明确事件标题、单行JSON字符串字段及空条件/脚本；其他格式请用只读检查。');
+    // Do not let the permissive document parser hide malformed or unknown fields.
+    for (const line of blocks[index].inner.split(/\r?\n/u)) {
+      if (!line.trim() || /^\s*\[\s*event\.[^\]]+\]\s*$/iu.test(line)) continue;
+      const field = /^[ \t]*(display|condition|js_execute)[ \t]*:[ \t]*(.*?)[ \t]*$/iu.exec(line);
+      if (!field) unsupported();
+      let value;
+      try { value = JSON.parse(field[2]); } catch { unsupported(); }
+      if (typeof value !== 'string') unsupported();
+    }
+    if (group.warnings.length || group.events.some(event => !event.id || event.condition.trim() || event.js_execute.trim() || event.warnings.length)) unsupported();
+    const selected = [...group.events].reverse().find(event => event.display.trim());
+    return { start: group.start, end: group.end, eventId: selected?.id || null, display: (selected?.display ?? '').replace(/^\n+|\n+$/gu, '') };
+  });
+  let rendered = '', cursor = 0;
+  for (const selection of selections) { rendered += text.slice(cursor, selection.start) + selection.display; cursor = selection.end; }
+  rendered += text.slice(cursor);
+  return { mode: 'static-display-preview', rendered, selections, executed: false, token: null,
+    message: '仅返回静态文本预览，不保存、不注入提示词、不执行条件或脚本。' };
+}
 export function inspectVarevent(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 32768) fail('事件检查文本须不超过32 KiB。');
   let opened = false, closed = 0;
