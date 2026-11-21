@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.38
+
+- Expand direct list items one level in numeric plot-log push to match the pinned upstream. Preserve deeper array values and count emitted values against the operation budget.
+
 ## 0.1.0-beta.37
 
 - Accept plain JSON object items in explicit plot-log push lists for existing managed arrays. Preserve upstream reference-based matching instead of deduplicating distinct objects by content. Continue rejecting direct nested array items.
