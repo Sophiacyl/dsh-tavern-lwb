@@ -58,8 +58,7 @@ export function parseNumericPlotLogSource(source) {
 }
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
-  // A previous migration can leave numeric locks. Those are compatible with
-  // this numeric-only subset; other rules may behave differently in v1.
+  // Only exact numeric leaves can carry this subset of v1 guards.
   for (const [path, rule] of Object.entries(engine.LWB_RULES_V2)) {
     const keys = path.split('.');
     let leaf = engine.variables;
@@ -69,8 +68,9 @@ export function replayNumericPlotLog(base, blocks) {
       }
       leaf = leaf[key];
     }
-    if (Object.keys(rule).length !== 1 || rule.typeLock !== 'number' || keys.length < 2 ||
-        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线只接受已有托管数值叶的独立number类型锁，不迁移其他守卫。');
+    if (Object.keys(rule).some(key => !['typeLock', 'min', 'max', 'step'].includes(key)) ||
+        (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== 'number') || keys.length < 2 ||
+        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线仅支持已有托管数值叶的number类型锁、min/max与step。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -121,13 +121,19 @@ export function replayNumericPlotLog(base, blocks) {
       // Upstream putSet overwrites and putBump sums before emitting a group.
       for (const [identity, { current, value }] of combined) {
         const leaf = leaves.get(identity) ?? { value: current, locked: false };
+        const { min, max, step } = engine.LWB_RULES_V2[identity] ?? {};
+        const clampStep = n => step === undefined ? n : Math.min(step, Math.max(-step, n));
+        let target = kind === 'set' && step === undefined ? value
+          : current + clampStep(kind === 'set' ? value - current : value);
+        if (!Number.isFinite(target)) fail('plot-log数值计算超出有限范围，不采用部分结果。');
+        if (min !== undefined) target = Math.max(target, min);
+        if (max !== undefined) target = Math.min(target, max);
         if (kind === 'set') {
-          leaf.value = value;
+          leaf.value = target;
           leaf.locked = true;
         } else {
           // The guard reads persisted message-start state. The executor then
           // subtracts the staged value and adds the resulting delta back to it.
-          const target = current + value;
           const delta = target - leaf.value;
           const next = leaf.value + delta;
           if (![target, delta, next].every(Number.isFinite)) fail('plot-log数值计算超出有限范围，不采用部分结果。');
@@ -138,9 +144,11 @@ export function replayNumericPlotLog(base, blocks) {
     }
   }
   const ops = [...leaves].map(([path, leaf]) => ({ op: 'set', path, value: leaf.value }));
-  const result = applyText(engine, JSON.stringify({ ops }));
+  // Values already passed v1's guards; State2 must not apply them again.
+  const result = applyText({ ...engine, LWB_RULES_V2: {} }, JSON.stringify({ ops }));
   if (!['success', 'noop'].includes(result.status)) fail('plot-log数值转换失败，不采用部分结果。');
   // Only upstream set installs a lock on an existing numeric leaf.
-  for (const [path, leaf] of leaves) if (leaf.locked) result.engine.LWB_RULES_V2[path] = { typeLock: 'number' };
+  result.engine.LWB_RULES_V2 = engine.LWB_RULES_V2;
+  for (const [path, leaf] of leaves) if (leaf.locked) result.engine.LWB_RULES_V2[path] = { ...engine.LWB_RULES_V2[path], typeLock: 'number' };
   return validateEngine(result.engine);
 }

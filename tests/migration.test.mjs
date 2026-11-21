@@ -103,10 +103,19 @@ test('plot-log chains numeric-lock baselines but rejects other or unbound rules'
   assert.deepEqual(next.LWB_RULES_V2, first.LWB_RULES_V2);
   assert.equal(first.variables.数据.金币, 20);
   for (const LWB_RULES_V2 of [
-    { '数据.金币': { typeLock: 'number', max: 100 } }, { '数据.金币': { typeLock: 'number', ro: false } },
+    { '数据.金币': { typeLock: 'number', ro: false } }, { '数据.生命': { objectExt: true } },
     { '数据.金币': { typeLock: 'string' } }, { '数据.缺失': { typeLock: 'number' } },
     { '数据["金币"]': { typeLock: 'number' } }, { 数据: { typeLock: 'number' } },
   ]) assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2 }, blocks), { code: 'LWB_PLOT_SUBSET' });
+});
+test('numeric plot-log applies leaf guard steps before bounds without reapplying State2 guards', () => {
+  const engine = { variables: { R: { n: 10, m: 50 } }, roots: ['R'], LWB_RULES_V2: { 'R.n': { min: 20, max: 30, step: 2 }, 'R.m': { max: 100 } } };
+  const set = replayNumericPlotLog(engine, [{ set: { R: { n: 100 } } }]);
+  const bump = replayNumericPlotLog(engine, [{ bump: { R: { n: 100 } } }]);
+  assert.equal(set.variables.R.n, 20); assert.equal(bump.variables.R.n, 20);
+  assert.deepEqual(bump.LWB_RULES_V2, engine.LWB_RULES_V2);
+  assert.deepEqual(set.LWB_RULES_V2, { 'R.n': { min: 20, max: 30, step: 2, typeLock: 'number' }, 'R.m': { max: 100 } });
+  assert.equal(engine.variables.R.n, 10);
 });
 test('explicit plot-log message chain keeps boundaries and rejects a malformed suffix atomically', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.30
+
+- Respect explicit existing numeric-leaf min/max/step in plot-log baseline rules, in the pinned v1 order and relative to message-start values. Preserve baseline constraints without applying State2 guards a second time. Inline guard directives remain unsupported.
+
 ## 0.1.0-beta.29
 
 - Replay an explicitly ordered numeric plot-log message chain in one migration preview. Keep each message boundary and numeric lock state; reject the whole candidate if any message is invalid. Only the confirmed final baseline is stored.

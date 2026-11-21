@@ -124,4 +124,26 @@ for (const [index, blocks] of continuation.entries()) {
   assert.deepEqual(batch.variables.数据, JSON.parse(context.chatMetadata.variables.数据));
   assert.deepEqual(chain.LWB_RULES_V2, Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([path, rule]) => [path, { typeLock: rule.typeLock }])));
 }
-console.log(`plot-log numeric: ${cases.length} standalone and ${continuation.length} chained upstream executor comparisons passed`);
+const guarded = [
+  [10, { min: 20, max: 30, step: 2 }, [set(100)]],
+  [10, { min: 20, max: 30, step: 2 }, [bump(100)]],
+  [50, { min: 8, max: 30, step: 3 }, [set(1), bump(-20)]],
+  [10, { min: 8, max: 30, step: 3, typeLock: 'number' }, [{ ...set(1), ...bump(20) }, bump(-20)]],
+  [10, { min: 12, step: 0 }, [set(1)]], [10, { max: 9 }, [bump(2)]],
+];
+for (const [initial, rule, blocks] of guarded) {
+  const path = '数据.金币';
+  const { typeLock, ...constraints } = rule;
+  const base = { variables: { 数据: { 金币: initial } }, roots: ['数据'], LWB_RULES_V2: { [path]: rule } };
+  const source = sourceFor(blocks);
+  synthetic.reset(source, { 数据: JSON.stringify(base.variables.数据) });
+  upstream.rulesSetTable({ [path]: { typeLock: typeLock ?? 'unknown', constraints } });
+  await upstream.applyVariablesForMessage(0);
+  const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
+  const { chatMetadata } = synthetic.getContext();
+  assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
+  assert.deepEqual(actual.variables.数据, JSON.parse(chatMetadata.variables.数据));
+  const upstreamRule = upstream.rulesGetTable()[path];
+  assert.deepEqual(actual.LWB_RULES_V2[path], { ...upstreamRule.constraints, ...(upstreamRule.typeLock === 'number' ? { typeLock: 'number' } : {}) });
+}
+console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained and ${guarded.length} guarded upstream comparisons passed`);
