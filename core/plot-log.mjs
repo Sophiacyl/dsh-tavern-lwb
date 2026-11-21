@@ -41,13 +41,12 @@ export function replayNumericPlotLog(base, blocks) {
     for (const [key, value] of Object.entries(block)) {
       const kind = opNames.get(key.toLowerCase().trim());
       if (!kind) fail('仅支持set/bump及其固定操作名别名。');
-      if (groups.has(kind)) fail('同块不接受多个名称指向同一操作。');
-      groups.set(kind, value);
+      if (!groups.has(kind)) groups.set(kind, []);
+      groups.get(kind).push(value);
     }
     for (const kind of ['set', 'bump']) {
       if (!groups.has(kind)) continue;
-      const group = groups.get(kind);
-      if (!plain(group)) fail('set/bump必须为根名到字段对象的映射。');
+      const combined = new Map();
       function walk(value, path) {
         if (plain(value)) {
           if (!Object.keys(value).length) fail('不接受空对象赋值。');
@@ -66,6 +65,16 @@ export function replayNumericPlotLog(base, blocks) {
         if (!engine.roots.includes(path[0]) || typeof current !== 'number' || !Number.isFinite(current)) fail('字段必须属于已托管的数值基线。');
         if (++count > 128) fail('同一条消息最多128个操作。');
         const identity = path.join('.');
+        const merged = kind === 'set' ? value : (combined.get(identity)?.value ?? 0) + value;
+        if (!Number.isFinite(merged)) fail('plot-log同块增量合计超出有限范围，不采用部分结果。');
+        combined.set(identity, { current, value: merged });
+      }
+      for (const group of groups.get(kind)) {
+        if (!plain(group)) fail('set/bump必须为根名到字段对象的映射。');
+        walk(group, []);
+      }
+      // Upstream putSet overwrites and putBump sums before emitting a group.
+      for (const [identity, { current, value }] of combined) {
         const leaf = leaves.get(identity) ?? { value: current, locked: false };
         if (kind === 'set') {
           leaf.value = value;
@@ -81,7 +90,6 @@ export function replayNumericPlotLog(base, blocks) {
         }
         leaves.set(identity, leaf);
       }
-      walk(group, []);
     }
   }
   const ops = [...leaves].map(([path, leaf]) => ({ op: 'set', path, value: leaf.value }));

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.24
+
+- Merge fixed numeric plot-log operation aliases within one block: last set wins and bump deltas sum in input order before replay. Reject nonfinite sums and count all inputs toward the operation budget before merging.
+
 ## 0.1.0-beta.23
 
 - Accept fixed upstream top-level operation aliases for numeric plot-log set/bump, including case and whitespace normalization. Reject multiple names for the same operation within a block; no card-specific aliases are read.

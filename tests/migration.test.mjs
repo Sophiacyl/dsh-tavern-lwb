@@ -48,10 +48,14 @@ test('plot-log normalizes fixed operation aliases before applying set then bump'
   const engine = replayNumericPlotLog(base, [{ ' AdJuSt ': { 数据: { 金币: -2 } }, 記下: { 数据: { 金币: 50 } } }]);
   assert.equal(engine.variables.数据.金币, 8);
   assert.deepEqual(engine.LWB_RULES_V2, { '数据.金币': { typeLock: 'number' } });
-  for (const keys of [['set', '记下'], ['BUMP', ' bump '], ['bump', '调整'], ['record', 'unknown']]) {
-    const block = Object.fromEntries(keys.map(key => [key, { 数据: { 金币: 2 } }]));
-    assert.throws(() => replayNumericPlotLog(base, [block]), { code: 'LWB_PLOT_SUBSET' });
-  }
+  const set = value => ({ 数据: { 金币: value } });
+  assert.equal(replayNumericPlotLog(base, [{ set: set(2), 记下: set(7) }]).variables.数据.金币, 7);
+  assert.equal(replayNumericPlotLog(base, [{ BUMP: set(2), ' bump ': set(7) }]).variables.数据.金币, 19);
+  assert.throws(() => replayNumericPlotLog(base, [{ bump: set(Number.MAX_VALUE), 调整: set(Number.MAX_VALUE) }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog(base, [{ record: set(2), unknown: set(7) }]), { code: 'LWB_PLOT_SUBSET' });
+  const wide = Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`k${i}`, i]));
+  const wideBase = { ...base, variables: { 数据: { ...wide } } };
+  assert.throws(() => replayNumericPlotLog(wideBase, [{ bump: { 数据: { ...wide } }, 调整: { 数据: { ...wide } } }]), { code: 'LWB_PLOT_SUBSET' });
   assert.equal(base.variables.数据.金币, 10);
 });
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {

@@ -58,6 +58,14 @@ const setAliases = ['记下', '記下', '记录', '記錄', '录入', '錄入', 
 const bumpAliases = ['推移', '变更', '變更', '调整', '調整', ' AdJuSt ', ' BUMP '];
 for (const key of setAliases) cases.push([10, [{ [key]: set(20).set }]]);
 for (const key of bumpAliases) cases.push([10, [{ [key]: bump(3).bump, 记下: set(20).set }]]);
+cases.push(
+  [10, [{ ...set(20), record: set(40).set }]],
+  [10, [{ ...set(20), record: set(40).set }, { ...bump(3), adjust: bump(7).bump }]],
+  [10, [{ adjust: bump(7).bump, ...bump(-2), 变更: bump(3).bump, 記下: set(20).set }]],
+  [10, [{ ...bump(1e20), adjust: bump(-1e20).bump, 调整: bump(1).bump }]],
+  [10, [{ ...bump(1e20), adjust: bump(1).bump, 调整: bump(-1e20).bump }]],
+  [10, [{ ...bump(2), adjust: bump(3).bump }, bump(7)]],
+);
 let seed = 0x1302c03;
 const random = limit => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % limit; };
 const values = [0, 1, -1, 0.1, 1e20, -1e20, 1e-200, -1e-200, 2 ** 53, 3.5];
