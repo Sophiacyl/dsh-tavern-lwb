@@ -46,6 +46,24 @@ test('explicit upstream snapshot decodes only declared roots and retains rule co
   assert.throws(() => parseStateBackup(JSON.stringify({ ...raw, variables: { 数据: '' } })));
 });
 
+test('legacy stateLogV2 floors migrate in numeric order and derive missing root claims', () => {
+  const floors = {
+    '2': { signature: '', rules: [], ops: [{ op: 'inc', path: '数据.金币', delta: 3 }], roots: [] },
+    '0': { signature: '<state>数据.金币: 10</state>', rules: [], ops: [{ op: 'set', path: '数据', value: { 金币: 10 } }] }
+  };
+  const pack = value => JSON.stringify({ spec: 'dsh-tavern-lwb/legacy-state-log', version: 1, log: { version: 1, floors: value } });
+  let selected; const engine = parseStateBackup(pack(floors), { onSelection: rows => { selected = rows; } });
+  assert.equal(engine.variables.数据.金币, 13);
+  assert.deepEqual(selected.map(row => row.floor), [0, 2]);
+  const deferred = { '0': { ...floors['0'], roots: [] }, '2': { ...floors['2'], roots: ['数据'] } };
+  assert.equal(parseStateBackup(pack(deferred)).variables.数据.金币, 13);
+  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: ['数据', '数据'] } })));
+  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], rules: [{ path: '数据', rule: {} }] } })));
+  assert.throws(() => parseStateBackup(pack({ '2': floors['2'] })));
+  assert.throws(() => parseStateBackup(pack({ ...floors, '01': floors['2'] })));
+  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: ['constructor'] } })));
+});
+
 const wal = records => JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records });
 const entry = (ops, patch = {}) => ({ kind: 'call', source: 'text', blocks: [], rules: [], ops, roots: ['数据'], ...patch });
 test('explicit WAL preserves text/call order and internal pop semantics', () => {

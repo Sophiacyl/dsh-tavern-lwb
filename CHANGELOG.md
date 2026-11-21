@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.16 — 2026-11-21
+
+- Add an explicit legacy stateLogV2 envelope converter with numeric floor ordering and preserved explicit root claims.
+- Derive missing legacy root claims from recorded rule/text requests, then replay through the bounded message-WAL path.
+- Require a floor-zero log entry rather than guessing checkpoint-only initialization; import a current baseline, not old chat history.
+
 ## 0.1.0-beta.15 — 2026-11-21
 
 - Add an explicit per-floor swipe-record selection envelope with strict ordering and selection checks; show the selected path before confirming baseline restoration.

@@ -8,6 +8,26 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
   let raw; try { raw = JSON.parse(text); } catch { fail('状态备份JSON格式错误。'); }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('状态备份须为JSON对象。');
   const branchMap = [];
+  if (raw.spec === 'dsh-tavern-lwb/legacy-state-log' && raw.version === 1) {
+    const log = raw.log;
+    if (!log || log.version !== 1 || !log.floors || typeof log.floors !== 'object' || Array.isArray(log.floors)) fail('旧State2日志须为version:1及floors映射。');
+    const floors = Object.keys(log.floors);
+    if (!floors.length || floors.length > 100 || floors.some(key => !/^(0|[1-9][0-9]*)$/u.test(key) || !Number.isSafeInteger(Number(key)))) fail('旧日志楼层须为最多100个规范非负整数。');
+    // Missing floor zero may hide a checkpoint-only initialization. Never guess it.
+    if (!Object.hasOwn(log.floors, '0')) fail('旧日志缺少第0楼，可能依赖旧检查点初始化；请先提供明确当前快照。');
+    const records = floors.sort((a, b) => Number(a) - Number(b)).map(floor => {
+      const old = log.floors[floor];
+      if (!old || typeof old.signature !== 'string' || !Array.isArray(old.rules) || !Array.isArray(old.ops)) fail('旧日志缺少signature/rules/ops。');
+      const ops = old.ops.map(op => ({ ...op, source: 'text' }));
+      const roots = Array.isArray(old.roots) ? old.roots : [...new Set([...old.rules, ...ops].map(item => {
+        if (!item || typeof item.path !== 'string') fail('旧日志路径无效。');
+        return item.path.split(/[.\[]/u)[0];
+      }))];
+      branchMap.push({ floor: Number(floor), selected: 0 });
+      return { v: 1, entries: [{ kind: 'text', blocks: [], rules: old.rules, ops, roots }] };
+    });
+    raw = { spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records };
+  }
   if (raw.spec === 'dsh-tavern-lwb/upstream-swipes' && raw.version === 1) {
     if (!Array.isArray(raw.floors) || !raw.floors.length || raw.floors.length > 100) fail('分支迁移需要1至100个明确排序的楼层。');
     const records = []; let previous = -1, candidates = 0;
