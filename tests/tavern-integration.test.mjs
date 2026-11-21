@@ -202,6 +202,22 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.match(failed.summaryStatus.message, /from/);
   assert.equal(failed.record.revision, savedMemory);
   assert.equal(modelCalls, 2);
+  // An independent plugin can backfill its own data on a current historical
+  // version, but cannot materialize an absent turn or target a hidden version.
+  let historyApi;
+  identities.set('synthetic-history-probe', { runtimeName: 'synthetic-history-probe', origin: 'global' });
+  await root.plugin({ name: 'synthetic-history-probe', inject: ['tavern'], apply(ctx) { historyApi = ctx.tavern; } }).await();
+  const gameId = 'synthetic-game';
+  const original = await historyApi.getTurn({ gameId, turn: 1 });
+  assert.equal(original.textVersion, 'greeting');
+  assert.deepEqual(await historyApi.saveTurnData({ gameId, turn: 1, textVersion: 'greeting', data: { backfill: true } }), { turn: 1, textVersion: 'greeting' });
+  assert.deepEqual(await historyApi.readTurnData({ gameId, turn: 1 }), { turn: 1, textVersion: 'greeting', data: { backfill: true } });
+  await assert.rejects(historyApi.saveTurnData({ gameId, turn: 1, textVersion: 'hidden-swipe', data: {} }), { code: 'TAVERN_PLUGIN_STALE_VERSION' });
+  await assert.rejects(historyApi.saveTurnData({ gameId, turn: 3, data: {} }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
+  await assert.rejects(historyApi.editTurn({ gameId, turn: 1, textVersion: 'greeting', text: '不可回填的原生正文' }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
+  await assert.rejects(historyApi.setVariables({ gameId, turn: 1, textVersion: 'greeting', variables: {} }), { code: 'TAVERN_PLUGIN_TURN_UNAVAILABLE' });
+  for (const name of ['gameForked', 'forkTurns', 'importGame']) assert.equal(historyApi[name], undefined, name + ' is not on the plugin service');
+  assert.deepEqual(await historyApi.getTurn({ gameId, turn: 1 }), original);
   await fiber.dispose();
   await assert.rejects(call('read'), { code: 'TAVERN_PLUGIN_NOT_FOUND' });
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' })).length, 0);
