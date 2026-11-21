@@ -37,12 +37,19 @@ export function parseStateBackup(text, { onDiagnostics, onSelection } = {}) {
       const old = log.floors[floor];
       if (!old || typeof old.signature !== 'string' || !Array.isArray(old.rules) || !Array.isArray(old.ops)) fail('旧日志缺少signature/rules/ops。');
       const ops = old.ops.map(op => ({ ...op, source: 'text' }));
-      const roots = Array.isArray(old.roots) ? old.roots : [...new Set([...old.rules, ...ops].map(item => {
+      const rules = old.rules.filter(item => {
+        if (!item || typeof item.path !== 'string' || !item.path.trim() || !item.rule || typeof item.rule !== 'object' || Array.isArray(item.rule)) fail('旧日志规则结构无效。');
+        return Object.keys(item.rule).length > 0;
+      });
+      const roots = Array.isArray(old.roots) ? [...new Set(old.roots.map(root => {
+        if (root !== null && typeof root === 'object') fail('旧日志根名不接受复杂对象。');
+        return String(root);
+      }).filter(Boolean))] : [...new Set([...old.rules, ...ops].map(item => {
         if (!item || typeof item.path !== 'string') fail('旧日志路径无效。');
         return item.path.split(/[.\[]/u)[0];
       }))];
       branchMap.push({ floor: Number(floor), selected: 0 });
-      return { v: 1, entries: [{ kind: 'text', blocks: [], rules: old.rules, ops, roots }] };
+      return { v: 1, entries: [{ kind: 'text', blocks: [], rules, ops, roots }] };
     });
     if (initialRecord) {
       if (records.length >= 100) fail('检查点加旧日志总楼层超过100。');

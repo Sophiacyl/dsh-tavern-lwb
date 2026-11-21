@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.18 — 2026-11-21
+
+- Normalize explicit legacy stateLogV2 root claims using the pinned upstream string/empty-filter semantics, deduplicate claims, and ignore valid empty rule declarations.
+- Keep modern WAL validation strict; complex root objects, unsafe paths and invalid rules remain rejected.
+
 ## 0.1.0-beta.17 — 2026-11-21
 
 - Accept an explicitly supplied legacy version-1 floor-zero checkpoint only when the old log has no floor-zero record.

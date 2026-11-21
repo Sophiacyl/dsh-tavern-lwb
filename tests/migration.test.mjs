@@ -57,8 +57,12 @@ test('legacy stateLogV2 floors migrate in numeric order and derive missing root 
   assert.deepEqual(selected.map(row => row.floor), [0, 2]);
   const deferred = { '0': { ...floors['0'], roots: [] }, '2': { ...floors['2'], roots: ['数据'] } };
   assert.equal(parseStateBackup(pack(deferred)).variables.数据.金币, 13);
-  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: ['数据', '数据'] } })));
-  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], rules: [{ path: '数据', rule: {} }] } })));
+  const normalized = parseStateBackup(pack({ '0': { ...floors['0'], roots: ['数据', '', '数据'], rules: [{ path: '数据', rule: {} }] } }));
+  assert.deepEqual(normalized.roots, ['数据']);
+  assert.equal(normalized.variables.数据.金币, 10);
+  assert.deepEqual(normalized.LWB_RULES_V2, {});
+  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: [{}] } })));
+  assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], rules: [{ path: '数据', rule: [] }] } })));
   assert.throws(() => parseStateBackup(pack({ '2': floors['2'] })));
   assert.throws(() => parseStateBackup(pack({ ...floors, '01': floors['2'] })));
   assert.throws(() => parseStateBackup(pack({ '0': { ...floors['0'], roots: ['constructor'] } })));
