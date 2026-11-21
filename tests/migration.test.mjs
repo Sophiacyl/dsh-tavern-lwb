@@ -125,6 +125,19 @@ test('plot-log readonly numeric leaves skip writes without adding locks', () => 
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { n: 'bad' } } }]), { code: 'LWB_PLOT_SUBSET' });
 });
+test('plot-log push deduplicates numeric items and requires explicit array growth', () => {
+  const base = { variables: { R: { a: [1, 1, 2], n: 10 } }, roots: ['R'], LWB_RULES_V2: {} };
+  const blocks = [[{ push: { R: { a: [2, 3, 3] } } }, { append: { R: { a: 4 } } }], { push: { R: { a: [3, 5] } }, bump: { R: { n: 2 } } }];
+  assert.deepEqual(replayNumericPlotLog(base, blocks).variables.R, { a: [1, 1, 2], n: 12 });
+  const LWB_RULES_V2 = { 'R.a': { arrayGrow: true, typeLock: 'array' } };
+  const grown = replayNumericPlotLog({ ...base, LWB_RULES_V2 }, blocks);
+  assert.deepEqual(grown.variables.R, { a: [1, 1, 2, 3, 4, 5], n: 12 });
+  assert.deepEqual(grown.LWB_RULES_V2, LWB_RULES_V2);
+  assert.deepEqual(replayNumericPlotLog({ ...base, LWB_RULES_V2: { 'R.a': { arrayGrow: true, ro: true } } }, blocks).variables.R.a, [1, 1, 2]);
+  assert.deepEqual(base.variables.R.a, [1, 1, 2]);
+  for (const a of [[], [null], ['3'], [[3]]]) assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a } } }]), { code: 'LWB_PLOT_SUBSET' });
+  assert.throws(() => replayNumericPlotLog(base, [{ push: { R: { a: Array(128).fill(1) } }, bump: { R: { n: 1 } } }]), { code: 'LWB_PLOT_SUBSET' });
+});
 test('plot-log JSON arrays combine entries within one block, not across blocks', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;
   const entries = [{ bump: { 数据: { 金币: 2 } } }, { 调整: { 数据: { 金币: 3 } } }, { set: { 数据: { 金币: 20 } } }];

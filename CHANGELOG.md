@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.33
+
+- Replay push into existing managed finite-number arrays only. An explicit array growth rule permits appending missing items in input order, without removing existing duplicates; locked and readonly arrays skip otherwise valid writes.
+
 ## 0.1.0-beta.32
 
 - Accept a nonempty JSON array of operation objects within one numeric plot-log block, preserving set overwrite and ordered bump summation across its entries. Nested or malformed entries still reject the entire candidate.

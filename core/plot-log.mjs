@@ -1,11 +1,12 @@
 // LWB Bridge — Based on LittleWhiteBox by biex; see LICENSE.md.
-// Deliberately narrow numeric-leaf subset of the pinned v1 plot-log protocol.
+// Deliberately narrow numeric subset of the pinned v1 plot-log protocol.
 import { validateEngine, applyText } from './index.mjs';
 const fail = message => { throw Object.assign(new Error(message), { code: 'LWB_PLOT_SUBSET' }); };
 const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 // Fixed top-level operation names from upstream varevent-editor.js OP_ALIASES.
 const opNames = new Map(Object.entries({
   set: ['set', '记下', '記下', '记录', '記錄', '录入', '錄入', 'record'],
+  push: ['push', '添入', '增录', '增錄', '追加', 'append'],
   bump: ['bump', '推移', '变更', '變更', '调整', '調整', 'adjust'],
 }).flatMap(([kind, names]) => names.map(name => [name, kind])));
 function boundedCopy(input) {
@@ -56,6 +57,7 @@ export function parseNumericPlotLogSource(source) {
   if (start !== null || !blocks.length) fail('需要1至16个闭合plot-log块。');
   return blocks;
 }
+const numericArray = value => Array.isArray(value) && value.every(Number.isFinite);
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
   // Only exact numeric leaves can carry this subset of v1 guards.
@@ -68,9 +70,11 @@ export function replayNumericPlotLog(base, blocks) {
       }
       leaf = leaf[key];
     }
-    if (Object.keys(rule).some(key => !['typeLock', 'min', 'max', 'step', 'ro'].includes(key)) ||
-        (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== 'number') || keys.length < 2 ||
-        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线仅支持已有托管数值叶的number类型锁、min/max、step与ro。');
+    const array = numericArray(leaf);
+    const fields = array ? ['typeLock', 'arrayGrow', 'ro'] : ['typeLock', 'min', 'max', 'step', 'ro'];
+    if (Object.keys(rule).some(key => !fields.includes(key)) ||
+        (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== (array ? 'array' : 'number')) || keys.length < 2 ||
+        !engine.roots.includes(keys[0]) || (!array && typeof leaf !== 'number')) fail('旧plot-log基线仅支持已有托管数值叶和数值数组的明确规则。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -83,12 +87,12 @@ export function replayNumericPlotLog(base, blocks) {
       if (!plain(entry) || !Object.keys(entry).length) fail('每个JSON操作条目须为非空对象。');
       for (const [key, value] of Object.entries(entry)) {
         const kind = opNames.get(key.toLowerCase().trim());
-        if (!kind) fail('仅支持set/bump及其固定操作名别名。');
+        if (!kind) fail('仅支持set/push/bump及其固定操作名别名。');
         if (!groups.has(kind)) groups.set(kind, []);
         groups.get(kind).push(value);
       }
     }
-    for (const kind of ['set', 'bump']) {
+    for (const kind of ['set', 'push', 'bump']) {
       if (!groups.has(kind)) continue;
       const combined = new Map();
       function walk(value, path) {
@@ -105,15 +109,21 @@ export function replayNumericPlotLog(base, blocks) {
         if (kind === 'bump' && typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(value.trim())) value = Number(value);
         // parseValueForSet also requires valid JSON, excluding leading zeros.
         if (kind === 'set' && typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value.trim())) value = JSON.parse(value.trim());
-        if (path.length < 2 || typeof value !== 'number' || !Number.isFinite(value)) fail('仅支持已有数值叶及相应的有限数值字符串，不接受根赋值、数组或空值。');
+        const incoming = kind === 'push' ? (Array.isArray(value) ? value : [value]) : null;
+        if (path.length < 2 || (incoming ? !incoming.length || !numericArray(incoming) : !Number.isFinite(value))) fail('仅支持已有数值叶的set/bump，或已有数值数组的有限数字push。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');
           current = current[key];
         }
-        if (!engine.roots.includes(path[0]) || typeof current !== 'number' || !Number.isFinite(current)) fail('字段必须属于已托管的数值基线。');
-        if (++count > 128) fail('同一条消息最多128个操作。');
+        if (!engine.roots.includes(path[0]) || (incoming ? !numericArray(current) : !Number.isFinite(current))) fail('字段必须属于已托管且匹配操作类型的数值基线。');
+        count += incoming?.length ?? 1;
+        if (count > 128) fail('同一条消息最多128个操作或待追加项。');
         const identity = path.join('.');
+        if (incoming) {
+          combined.set(identity, { current, value: [...(combined.get(identity)?.value ?? []), ...incoming] });
+          return;
+        }
         const merged = kind === 'set' ? value : (combined.get(identity)?.value ?? 0) + value;
         if (!Number.isFinite(merged)) fail('plot-log同块增量合计超出有限范围，不采用部分结果。');
         combined.set(identity, { current, value: merged });
@@ -125,8 +135,15 @@ export function replayNumericPlotLog(base, blocks) {
       // Upstream putSet overwrites and putBump sums before emitting a group.
       for (const [identity, { current, value }] of combined) {
         const leaf = leaves.get(identity) ?? { value: current, locked: false };
-        const { min, max, step, ro } = engine.LWB_RULES_V2[identity] ?? {};
+        const { min, max, step, ro, arrayGrow } = engine.LWB_RULES_V2[identity] ?? {};
         if (ro === true) continue; // Upstream rejects only this operation, not the message.
+        if (kind === 'push') {
+          if (arrayGrow !== true) continue; // v1 arrays are locked unless growth is explicit.
+          const next = [...leaf.value];
+          for (const item of value) if (!next.includes(item)) next.push(item);
+          leaves.set(identity, { value: next, locked: false });
+          continue;
+        }
         const clampStep = n => step === undefined ? n : Math.min(step, Math.max(-step, n));
         let target = kind === 'set' && step === undefined ? value
           : current + clampStep(kind === 'set' ? value - current : value);

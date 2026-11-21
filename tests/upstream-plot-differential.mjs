@@ -162,4 +162,26 @@ for (const [initial, rule, blocks] of guarded) {
   }]));
   assert.deepEqual(actual.LWB_RULES_V2, rules);
 }
-console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained and ${guarded.length} guarded upstream comparisons passed`);
+const push = value => ({ push: { 数据: { 清单: value } } });
+const arrayCases = [
+  [{ arrayGrow: true, typeLock: 'array' }, [push([1, 2, 2]), push(3)]],
+  [{ arrayGrow: true }, [[push([2, 3]), { 追加: push([3, 4]).push }], bump(2)]],
+  [{ arrayGrow: false }, [push(3), bump(2)]],
+  [{ arrayGrow: true, ro: true }, [push(3)]],
+  [null, [push(3)]],
+];
+for (const [rule, blocks] of arrayCases) {
+  const path = '数据.清单';
+  const base = { variables: { 数据: { 清单: [1, 1], 金币: 10 } }, roots: ['数据'], LWB_RULES_V2: rule ? { [path]: rule } : {} };
+  const source = sourceFor(blocks);
+  synthetic.reset(source, { 数据: JSON.stringify(base.variables.数据) });
+  upstream.rulesSetTable(rule ? { [path]: { typeLock: rule.typeLock ?? 'unknown', arrayPolicy: rule.arrayGrow ? 'grow' : 'lock', ro: rule.ro } } : {});
+  await upstream.applyVariablesForMessage(0);
+  const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
+  const { chatMetadata } = synthetic.getContext();
+  assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
+  assert.deepEqual(actual.variables.数据, JSON.parse(chatMetadata.variables.数据));
+  assert.deepEqual(actual.LWB_RULES_V2, base.LWB_RULES_V2);
+  assert.deepEqual(Object.keys(upstream.rulesGetTable()), Object.keys(base.LWB_RULES_V2));
+}
+console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded and ${arrayCases.length} array push upstream comparisons passed`);

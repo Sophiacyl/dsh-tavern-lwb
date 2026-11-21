@@ -11,12 +11,12 @@ const { readPluginArchive } = await import(referenceModule('api8', 'domain/user-
 const root = new URL('../', import.meta.url).pathname;
 
 test('distributed ZIP passes actual Tavern parser, contains required licenses and runs standalone without research imports', async t => {
-  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.32.zip'));
+  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.33.zip'));
   const manifest = JSON.parse(await readFile(path.join(root, 'dist/manifest.json')));
   assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.sha256);
   const { pkg, files } = readPluginArchive(archive);
   assert.equal(pkg.name, 'dsh-tavern-lwb');
-  assert.equal(pkg.version, '0.1.0-beta.32');
+  assert.equal(pkg.version, '0.1.0-beta.33');
   assert.equal(pkg.dependencies, undefined);
   assert.equal(archive.length, manifest.bytes);
   assert.deepEqual([...files.keys()].sort(), manifest.files.map(item => item.path).sort());
