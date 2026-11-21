@@ -1,0 +1,81 @@
+// LWB Bridge — Based on LittleWhiteBox by biex; see LICENSE.md.
+// Offline test: run pinned v1 parser/executor without loading a real host.
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { registerHooks } from 'node:module';
+import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { replayNumericPlotLog } from '../core/plot-log.mjs';
+
+assert.ok(process.env.LWB_UPSTREAM_ROOT, 'Set LWB_UPSTREAM_ROOT to the public checkout');
+const root = realpathSync(process.env.LWB_UPSTREAM_ROOT);
+const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+assert.equal(git('rev-parse', 'HEAD'), '707e03f2d7f75bb6588b29625b3bd61b6c4a7c5a');
+assert.equal(git('status', '--porcelain'), '');
+const file = name => pathToFileURL(join(root, 'modules/variables', name)).href;
+const core = file('variables-core.js'), editor = file('varevent-editor.js'), commands = file('var-commands.js');
+const stub = source => 'data:text/javascript,' + encodeURIComponent(source);
+const host = stub(`
+  let context;
+  export const reset = (text, variables) => context = { chat: [{mes: text}], chatMetadata: {variables} };
+  export const getContext = () => context;
+  export const extension_settings = {};
+  export const getLocalVariable = key => context.chatMetadata.variables[key];
+  export const setLocalVariable = (key, value) => { context.chatMetadata.variables[key] = value; };
+`);
+const forbidden = names => stub(names.map(name => `export function ${name}() { throw new Error('unexpected host call: ${name}'); }`).join('\n'));
+const redirects = new Map([
+  ['../../../../../extensions.js', host], ['../../../../../variables.js', host],
+  ['../../../../../../script.js', forbidden(['updateMessageBlock'])],
+  ['../../core/event-manager.js', stub(`export const event_types = {}; export function createModuleEvents() { throw new Error('unexpected event registration'); }`)],
+  ['../../core/debug-core.js', stub(`export const xbLog = {}; export const CacheRegistry = { register() {} };`)],
+  ['../../core/after-ai-gate.js', forbidden(['initAfterAiGate', 'notifyAfterAiHint', 'registerAfterAiHandler', 'waitForAfterAiReady'])],
+  ['./varevent/condition.js', forbidden(['conditionGroups', 'executeCondition', 'joinConditions', 'macroExpression', 'parseCondition'])],
+  ['./state2/index.js', forbidden(['applyStateForMessage', 'createStateApi', 'rebuildStateV2', 'handleStateSwipe', 'handleStateSwipeDeleted', 'openStateChat', 'cleanupStateService'])],
+  ['../../core/slash-command.js', forbidden(['executeSlashCommand'])],
+]);
+const modules = new Set([core, editor, commands]);
+const hook = registerHooks({ resolve(specifier, context, next) {
+  if (modules.has(context.parentURL) && redirects.has(specifier)) return { url: redirects.get(specifier), shortCircuit: true };
+  return next(specifier, context);
+} });
+let upstream, synthetic;
+try {
+  upstream = await import(core);
+  synthetic = await import(host);
+} finally { hook.deregister(); }
+
+const set = value => ({ set: { 数据: { 金币: value } } });
+const bump = value => ({ bump: { 数据: { 金币: value } } });
+const cases = [
+  [10, [set(20), bump(3)]], [10, [bump(3), set(20)]], [10, [bump(2), bump(3)]],
+  [10, [{ ...bump(1), ...set(1e20) }]], [10, [{ ...set(1e20), ...bump(1) }]],
+  [10, [set(10)]], [10, [bump(0)]],
+  [10, [{ set: { 数据: { 深层: { 生命: 55 } } }, bump: { 数据: { 金币: 2 } } }]],
+];
+let seed = 0x1302c03;
+const random = limit => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % limit; };
+const values = [0, 1, -1, 0.1, 1e20, -1e20, 1e-200, -1e-200, 2 ** 53, 3.5];
+const sample = () => values[random(values.length)];
+for (let i = 0; i < 128; i++) {
+  const blocks = Array.from({ length: 1 + random(16) }, () => {
+    const mode = random(3);
+    return mode === 0 ? set(sample()) : mode === 1 ? bump(sample()) : { ...bump(sample()), ...set(sample()) };
+  });
+  cases.push([sample(), blocks]);
+}
+for (const [index, [initial, blocks]] of cases.entries()) {
+  const base = { variables: { 数据: { 金币: initial, 深层: { 生命: 50 } } }, roots: ['数据'], LWB_RULES_V2: {} };
+  const text = blocks.map(block => `<plot-log>\n${JSON.stringify(block)}\n</plot-log>`).join('\n');
+  synthetic.reset(text, { 数据: JSON.stringify(base.variables.数据) });
+  upstream.rulesSetTable({});
+  await upstream.applyVariablesForMessage(0);
+  const result = replayNumericPlotLog(base, blocks);
+  const meta = synthetic.getContext().chatMetadata;
+  assert.ok(meta.LWB_PLOT_APPLIED_KEY?.[0], `case ${index} did not reach upstream settlement`);
+  assert.deepEqual(result.variables.数据, JSON.parse(meta.variables.数据), `case ${index}: values`);
+  const locks = Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([path, rule]) => [path, { typeLock: rule.typeLock }]));
+  assert.deepEqual(result.LWB_RULES_V2, locks, `case ${index}: numeric locks`);
+}
+console.log(`plot-log numeric: ${cases.length} upstream executor comparisons passed`);

@@ -30,6 +30,8 @@ node --experimental-loader ./tests/loader.mjs --test tests/*.test.mjs
 
 可选离线WAL差分探针：将 `LWB_UPSTREAM_ROOT` 指向已准备的公开LittleWhiteBox checkout（HEAD须为707e03f2d7f75bb6588b29625b3bd61b6c4a7c5a且工作树干净），运行 `node tests/upstream-wal-differential.mjs`。不会下载或修改该checkout，只加载State2纯执行器；5组定向案例与64组固定种子多条目序列同时经WAL和显式swipe选择入口对照变量、规则与根归属；swipe用例混入未选非法记录，验证它们不执行，不执行ST宿主入口。另有3组旧stateLogV2归一化案例，对照重复/空根、显式空归属和缺省根推导。该脚本不在运行ZIP内。
 
+可选离线 plot-log 差分：同样设置 `LWB_UPSTREAM_ROOT`，用支持 `registerHooks` 的 Node（已验证 v24.22.1）运行 `node tests/upstream-plot-differential.mjs`。加载固定上游原始解析器和执行入口，只替换宿主接口为纯内存夹具，比较 8 组定向案例和 128 组固定种子序列的数值及类型锁。无需安装依赖，不执行事件条件、脚本或 State2，不写上游 checkout，也不进入运行 ZIP。
+
 手机布局测试需要 Playwright Chromium；首次安装同样是显式命令：
 
 ```sh
