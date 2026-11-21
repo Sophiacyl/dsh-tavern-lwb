@@ -130,20 +130,27 @@ const guarded = [
   [50, { min: 8, max: 30, step: 3 }, [set(1), bump(-20)]],
   [10, { min: 8, max: 30, step: 3, typeLock: 'number' }, [{ ...set(1), ...bump(20) }, bump(-20)]],
   [10, { min: 12, step: 0 }, [set(1)]], [10, { max: 9 }, [bump(2)]],
+  [10, { ro: true, step: 2 }, [set(100), bump(3)]],
+  [10, { ro: true, typeLock: 'number' }, [{ ...set(50), ...bump(20) }]],
+  [10, { ro: false }, [set(7)]],
+  [10, { ro: true }, [{ set: { 数据: { 金币: 99, 其他: 20 } }, bump: { 数据: { 金币: -3, 其他: 2 } } }]],
 ];
 for (const [initial, rule, blocks] of guarded) {
   const path = '数据.金币';
-  const { typeLock, ...constraints } = rule;
-  const base = { variables: { 数据: { 金币: initial } }, roots: ['数据'], LWB_RULES_V2: { [path]: rule } };
+  const { typeLock, ro, ...constraints } = rule;
+  const base = { variables: { 数据: { 金币: initial, 其他: 10 } }, roots: ['数据'], LWB_RULES_V2: { [path]: rule } };
   const source = sourceFor(blocks);
   synthetic.reset(source, { 数据: JSON.stringify(base.variables.数据) });
-  upstream.rulesSetTable({ [path]: { typeLock: typeLock ?? 'unknown', constraints } });
+  upstream.rulesSetTable({ [path]: { typeLock: typeLock ?? 'unknown', ro, constraints } });
   await upstream.applyVariablesForMessage(0);
   const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
   const { chatMetadata } = synthetic.getContext();
   assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
   assert.deepEqual(actual.variables.数据, JSON.parse(chatMetadata.variables.数据));
-  const upstreamRule = upstream.rulesGetTable()[path];
-  assert.deepEqual(actual.LWB_RULES_V2[path], { ...upstreamRule.constraints, ...(upstreamRule.typeLock === 'number' ? { typeLock: 'number' } : {}) });
+  const rules = Object.fromEntries(Object.entries(upstream.rulesGetTable()).map(([name, node]) => [name, {
+    ...node.constraints, ...(node.typeLock === 'number' ? { typeLock: 'number' } : {}),
+    ...(name === path && ro !== undefined ? { ro: node.ro } : {}),
+  }]));
+  assert.deepEqual(actual.LWB_RULES_V2, rules);
 }
 console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained and ${guarded.length} guarded upstream comparisons passed`);

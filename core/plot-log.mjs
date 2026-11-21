@@ -68,9 +68,9 @@ export function replayNumericPlotLog(base, blocks) {
       }
       leaf = leaf[key];
     }
-    if (Object.keys(rule).some(key => !['typeLock', 'min', 'max', 'step'].includes(key)) ||
+    if (Object.keys(rule).some(key => !['typeLock', 'min', 'max', 'step', 'ro'].includes(key)) ||
         (Object.hasOwn(rule, 'typeLock') && rule.typeLock !== 'number') || keys.length < 2 ||
-        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线仅支持已有托管数值叶的number类型锁、min/max与step。');
+        !engine.roots.includes(keys[0]) || typeof leaf !== 'number') fail('旧plot-log基线仅支持已有托管数值叶的number类型锁、min/max、step与ro。');
   }
   if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 16) fail('需要同一条消息内的1至16个JSON块。');
   const leaves = new Map();
@@ -121,7 +121,8 @@ export function replayNumericPlotLog(base, blocks) {
       // Upstream putSet overwrites and putBump sums before emitting a group.
       for (const [identity, { current, value }] of combined) {
         const leaf = leaves.get(identity) ?? { value: current, locked: false };
-        const { min, max, step } = engine.LWB_RULES_V2[identity] ?? {};
+        const { min, max, step, ro } = engine.LWB_RULES_V2[identity] ?? {};
+        if (ro === true) continue; // Upstream rejects only this operation, not the message.
         const clampStep = n => step === undefined ? n : Math.min(step, Math.max(-step, n));
         let target = kind === 'set' && step === undefined ? value
           : current + clampStep(kind === 'set' ? value - current : value);
@@ -143,6 +144,7 @@ export function replayNumericPlotLog(base, blocks) {
       }
     }
   }
+  if (!leaves.size) return engine; // All validated operations were refused.
   const ops = [...leaves].map(([path, leaf]) => ({ op: 'set', path, value: leaf.value }));
   // Values already passed v1's guards; State2 must not apply them again.
   const result = applyText({ ...engine, LWB_RULES_V2: {} }, JSON.stringify({ ops }));

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.31
+
+- Honor explicit readonly guards on existing plot-log numeric leaves: skip valid writes and preserve the rule without adding a type lock. Other valid operations in the message still replay.
+
 ## 0.1.0-beta.30
 
 - Respect explicit existing numeric-leaf min/max/step in plot-log baseline rules, in the pinned v1 order and relative to message-start values. Preserve baseline constraints without applying State2 guards a second time. Inline guard directives remain unsupported.

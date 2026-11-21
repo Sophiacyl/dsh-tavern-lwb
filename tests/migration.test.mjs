@@ -103,7 +103,7 @@ test('plot-log chains numeric-lock baselines but rejects other or unbound rules'
   assert.deepEqual(next.LWB_RULES_V2, first.LWB_RULES_V2);
   assert.equal(first.variables.数据.金币, 20);
   for (const LWB_RULES_V2 of [
-    { '数据.金币': { typeLock: 'number', ro: false } }, { '数据.生命': { objectExt: true } },
+    { '数据.金币': { typeLock: 'number', enum: ['1'] } }, { '数据.生命': { objectExt: true } },
     { '数据.金币': { typeLock: 'string' } }, { '数据.缺失': { typeLock: 'number' } },
     { '数据["金币"]': { typeLock: 'number' } }, { 数据: { typeLock: 'number' } },
   ]) assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2 }, blocks), { code: 'LWB_PLOT_SUBSET' });
@@ -116,6 +116,14 @@ test('numeric plot-log applies leaf guard steps before bounds without reapplying
   assert.deepEqual(bump.LWB_RULES_V2, engine.LWB_RULES_V2);
   assert.deepEqual(set.LWB_RULES_V2, { 'R.n': { min: 20, max: 30, step: 2, typeLock: 'number' }, 'R.m': { max: 100 } });
   assert.equal(engine.variables.R.n, 10);
+});
+test('plot-log readonly numeric leaves skip writes without adding locks', () => {
+  const base = { variables: { R: { n: 10, m: 50 } }, roots: ['R'], LWB_RULES_V2: { 'R.n': { ro: true, step: 2 }, 'R.m': { ro: false } } };
+  assert.deepEqual(replayNumericPlotLog(base, [{ set: { R: { n: 100 } }, bump: { R: { n: 2 } } }]), base);
+  const result = replayNumericPlotLog(base, [{ set: { R: { n: 100 } }, bump: { R: { n: 2, m: 1 } } }]);
+  assert.deepEqual(result.variables.R, { n: 10, m: 51 });
+  assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
+  assert.throws(() => replayNumericPlotLog(base, [{ set: { R: { n: 'bad' } } }]), { code: 'LWB_PLOT_SUBSET' });
 });
 test('explicit plot-log message chain keeps boundaries and rejects a malformed suffix atomically', () => {
   const baseEngine = applyText(emptyEngine(), initial).engine;
@@ -134,7 +142,6 @@ test('explicit plot-log message chain keeps boundaries and rejects a malformed s
 test('plot-log subset rejects unsupported operations and excessive or nonfinite input', () => {
   const base = applyText(emptyEngine(), initial).engine;
   for (const block of [{ push: { 数据: ['药'] } }, { del: ['数据'] }, { set: { 数据: { 新字段: 1 } } }, { set: { 数据: null } }, { set: { 数据: { 金币: [] } } }, { bump: { 数据: { '$ro 金币': 2 } } }]) assert.throws(() => replayNumericPlotLog(base, [block]));
-  assert.throws(() => replayNumericPlotLog({ ...base, LWB_RULES_V2: { '数据.金币': { ro: true } } }, [{ bump: { 数据: { 金币: 1 } } }]));
   assert.throws(() => replayNumericPlotLog(base, Array.from({ length: 17 }, () => ({ bump: { 数据: { 金币: 1 } } }))), { code: 'LWB_PLOT_SUBSET' });
   const huge = { ...base, variables: { 数据: { 金币: Number.MAX_VALUE } } };
   assert.throws(() => replayNumericPlotLog(huge, [{ bump: { 数据: { 金币: Number.MAX_VALUE } } }]), { code: 'LWB_PLOT_SUBSET' });
