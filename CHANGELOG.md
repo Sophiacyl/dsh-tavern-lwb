@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.39
+
+- Replay set/bump on existing managed finite numeric roots, with the same readonly, range and step guards. Do not create roots or coerce string-valued baselines.
+
 ## 0.1.0-beta.38
 
 - Expand direct list items one level in numeric plot-log push to match the pinned upstream. Preserve deeper array values and count emitted values against the operation budget.

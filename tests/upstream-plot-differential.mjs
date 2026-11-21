@@ -219,4 +219,25 @@ for (const [rule, initial, blocks] of rootCases) {
   assert.deepEqual(actual.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.deepEqual(Object.keys(upstream.rulesGetTable()), Object.keys(base.LWB_RULES_V2));
 }
-console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded, ${arrayCases.length} nested and ${rootCases.length} root array push upstream comparisons passed`);
+const rootNumericCases = [
+  [10, {}, [{ set: { 数值: '1.5' } }]],
+  [10, {}, [{ bump: { 数值: '+2.5' } }]],
+  [10, { step: 3, max: 12 }, [{ set: { 数值: 1 } }, { bump: { 数值: 20 } }]],
+  [10, { ro: true }, [{ set: { 数值: 1 }, bump: { 数值: 2 } }]],
+  [10, {}, [{ set: { 数值: 1e20 }, bump: { 数值: 1 } }]],
+];
+for (const [initial, rule, blocks] of rootNumericCases) {
+  const base = { variables: { 数值: initial }, roots: ['数值'], LWB_RULES_V2: Object.keys(rule).length ? { 数值: rule } : {} };
+  const { ro, ...constraints } = rule;
+  const source = sourceFor(blocks);
+  synthetic.reset(source, { 数值: String(initial) });
+  upstream.rulesSetTable(Object.keys(rule).length ? { 数值: { typeLock: 'unknown', ro, constraints } } : {});
+  await upstream.applyVariablesForMessage(0);
+  const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/plot-log-numeric', version: 1, baseEngine: base, source }));
+  const { chatMetadata } = synthetic.getContext();
+  assert.ok(chatMetadata.LWB_PLOT_APPLIED_KEY?.[0]);
+  assert.equal(String(actual.variables.数值), chatMetadata.variables.数值);
+  const node = upstream.rulesGetTable().数值;
+  assert.deepEqual(actual.LWB_RULES_V2, node ? { 数值: { ...node.constraints, ...(ro !== undefined ? { ro: node.ro } : {}), ...(node.typeLock === 'number' ? { typeLock: 'number' } : {}) } } : {});
+}
+console.log(`plot-log numeric: ${cases.length} standalone, ${continuation.length} chained, ${guarded.length} guarded, ${arrayCases.length} nested and ${rootCases.length} root array push, ${rootNumericCases.length} root numeric upstream comparisons passed`);

@@ -145,6 +145,18 @@ test('plot-log push preserves scalar types and does not parse strings', () => {
   assert.deepEqual(result.LWB_RULES_V2, base.LWB_RULES_V2);
   assert.deepEqual(base.variables.R.a, [1, '1', false, false]);
 });
+test('plot-log set and bump replay only existing managed numeric roots', () => {
+  const base = { variables: { R: 10 }, roots: ['R'], LWB_RULES_V2: { R: { step: 3, max: 12 } } };
+  const result = replayNumericPlotLog(base, [{ set: { R: '1.5' } }, { bump: { R: '+20' } }]);
+  assert.equal(result.variables.R, 12);
+  assert.deepEqual(result.LWB_RULES_V2, { R: { step: 3, max: 12, typeLock: 'number' } });
+  assert.equal(base.variables.R, 10);
+  const locked = { ...base, LWB_RULES_V2: { R: { ro: true } } };
+  assert.deepEqual(replayNumericPlotLog(locked, [{ set: { R: 20 }, bump: { R: 5 } }]), locked);
+  for (const variables of [{}, { R: '10' }, { R: true }, { R: {} }, { R: [] }]) {
+    assert.throws(() => replayNumericPlotLog({ ...base, variables, LWB_RULES_V2: {} }, [{ bump: { R: 1 } }]), { code: 'LWB_PLOT_SUBSET' });
+  }
+});
 test('plot-log push supports existing managed root arrays without creating them', () => {
   const base = { variables: { R: [1, 1, '1'] }, roots: ['R'], LWB_RULES_V2: { R: { arrayGrow: true, typeLock: 'array' } } };
   const result = replayNumericPlotLog(base, [{ push: { R: [1, '1', 2, true] } }, { append: { R: 'ok' } }]);
