@@ -52,6 +52,18 @@ for (const [name, entries] of cases) {
     const expected = { variables: Object.fromEntries(Object.entries(meta.variables).filter(([key]) => owned.has(key))), LWB_RULES_V2: Object.fromEntries(Object.entries(meta.LWB_RULES_V2).filter(([key]) => owned.has(key.split('.')[0]))), roots: [...owned] };
     const actual = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [{ v: 1, entries }] }));
     assert.deepEqual(actual, expected, name);
+    // Preserve each entry as a source floor; alternate selected indices and include
+    // deliberately invalid unselected records to prove they are never executed.
+    const floors = entries.map((item, index) => {
+      const selected = index % 2;
+      const decoy = { v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'execute', path: '数据', source: 'text' }] }] };
+      const selectedRecord = { v: 1, entries: [item] };
+      return { floor: index * 2, selected, records: selected ? [decoy, selectedRecord] : [selectedRecord, decoy] };
+    });
+    let mapping;
+    const selectedState = parseStateBackup(JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors }), { onSelection: value => { mapping = value; } });
+    assert.deepEqual(selectedState, expected, name + ' selected swipe path');
+    assert.deepEqual(mapping, floors.map(({ floor, selected }) => ({ floor, selected })));
     checked++;
   } finally { replaceRules({}); }
 }
