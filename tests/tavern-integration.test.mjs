@@ -65,8 +65,14 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await fiber.await();
   const call = (method, args = {}) => api.callHandler(plugin.name + '/' + method, { gameId: 'synthetic-game', ...args });
   assert.equal((await call('read')).enabled, false);
+  const beforeInspection = await api.exportGame('synthetic-chat');
   const inspected = await call('compat/varevent-inspect', { text: '<varevent>\n[event.test]\ndisplay: "检查"\njs_execute: "throw new Error()"\n</varevent>' });
   assert.equal(inspected.eventCount, 1); assert.equal(inspected.executed, false);
+  assert.equal(inspected.evaluated, false); assert.equal(Object.hasOwn(inspected, 'token'), false);
+  assert.deepEqual(await api.exportGame('synthetic-chat'), beforeInspection, 'inspect endpoint must not change plugin storage');
+  assert.equal(modelCalls, 0);
+  await assert.rejects(call('compat/varevent-inspect', { text: '<varevent></varevent><varevent>' }), { code: 'LWB_VAREVENT_INSPECT' });
+  assert.deepEqual(await api.exportGame('synthetic-chat'), beforeInspection, 'failed inspection also leaves storage unchanged');
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 2, input: '前进' })).length, 0);
   await call('enable', { enabled: true });
   const preview = await call('preview', { text: initial, expectedTextVersion: 'greeting' });
@@ -146,7 +152,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await assert.rejects(call('read'), { code: 'TAVERN_PLUGIN_NOT_FOUND' });
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' })).length, 0);
   assert.ok(warnings.length > 0, 'invalid-only task reaches host error observation');
-  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务')), JSON.stringify(warnings));
+  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect')), JSON.stringify(warnings));
 });
 
 test('Cordis waits for the plugin asynchronous cleanup before unload completes', async t => {
