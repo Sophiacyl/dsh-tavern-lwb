@@ -58,7 +58,7 @@ export function parseNumericPlotLogSource(source) {
   return blocks;
 }
 const scalarArray = value => Array.isArray(value) && value.every(item =>
-  Number.isFinite(item) || typeof item === 'string' || typeof item === 'boolean');
+  item === null || Number.isFinite(item) || typeof item === 'string' || typeof item === 'boolean');
 export function replayNumericPlotLog(base, blocks) {
   const engine = validateEngine(base);
   // Only exact numeric leaves can carry this subset of v1 guards.
@@ -111,7 +111,7 @@ export function replayNumericPlotLog(base, blocks) {
         // parseValueForSet also requires valid JSON, excluding leading zeros.
         if (kind === 'set' && typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value.trim())) value = JSON.parse(value.trim());
         const incoming = kind === 'push' ? (Array.isArray(value) ? value : [value]) : null;
-        if (incoming ? path.length < 1 || !incoming.length || !scalarArray(incoming) : path.length < 2 || !Number.isFinite(value)) fail('仅支持已有数值叶的set/bump，或已有标量数组的数字、字符串或布尔值push。');
+        if (incoming ? path.length < 1 || !incoming.length || !scalarArray(incoming) : path.length < 2 || !Number.isFinite(value)) fail('仅支持已有数值叶的set/bump，或已有标量数组的数字、字符串、布尔值或null push。');
         let current = engine.variables;
         for (const key of path) {
           if (!plain(current) || !Object.hasOwn(current, key)) fail('字段必须已存在于基线中。');

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.36
+
+- Preserve literal JSON null in plot-log push into existing managed root or nested scalar arrays. Deduplicate null separately from the string "null"; numeric set/bump behavior is unchanged.
+
 ## 0.1.0-beta.35
 
 - Support push into existing managed root scalar arrays with the same explicit growth, readonly, ordering and deduplication rules as nested arrays. Keep root creation and scalar coercion unsupported.
