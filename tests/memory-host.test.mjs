@@ -59,6 +59,26 @@ test('state processing, memory import and per-game settings share ownership with
   assert.equal(await f.memory.prompt({ gameId: 'b', turn: 2 }), '');
 });
 
+test('state backup restore preserves same-turn memory and rejects a changed state preview', async () => {
+  const f = fixture(); await f.state.enable({ gameId: 'a', enabled: true });
+  await f.state.initialize({ gameId: 'a', text: '数据.生命值: 100', expectedTextVersion: 'v1' });
+  const backup = await f.state.exportState({ gameId: 'a' });
+  await f.previewImport();
+  const memoryRevision = (await f.memory.read({ gameId: 'a' })).record.revision;
+  f.show('a', 2, 'v2'); await f.state.process({ gameId: 'a', expectedTextVersion: 'v2' });
+  const p = await f.state.migrationPreview({ gameId: 'a', text: backup.text, expectedTextVersion: 'v2' });
+  await f.state.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true });
+  assert.equal((await f.state.readEngine('a', 2)).variables.数据.生命值, 100);
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.revision, memoryRevision);
+  const row = await f.store.stateAt('a', 2); assert.equal(row.data.parent, null);
+  await assert.rejects(f.state.migrationCommit({ gameId: 'a', token: p.token, expectedTextVersion: 'v2', confirmReplace: true }), { code: 'LWB_MIGRATION' });
+  const stale = await f.state.migrationPreview({ gameId: 'a', text: backup.text, expectedTextVersion: 'v2' });
+  const alternate = await f.state.migrationPreview({ gameId: 'a', text: JSON.stringify({ ...JSON.parse(backup.text), engine: { variables: { 数据: { 生命值: 80 } }, roots: ['数据'], LWB_RULES_V2: {} } }), expectedTextVersion: 'v2' });
+  await f.state.migrationCommit({ gameId: 'a', token: alternate.token, expectedTextVersion: 'v2', confirmReplace: true });
+  await assert.rejects(f.state.migrationCommit({ gameId: 'a', token: stale.token, expectedTextVersion: 'v2', confirmReplace: true }), { code: 'LWB_PARENT_CHANGED' });
+  assert.equal((await f.memory.read({ gameId: 'a' })).record.revision, memoryRevision);
+});
+
 test('stale preview and concurrent imports reject before memory replacement', async () => {
   const f = fixture(), p = await f.memory.preview({ gameId: 'a', text: pack('甲'), expectedTextVersion: 'v1' });
   await f.previewImport('乙');
