@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.55`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.56`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
@@ -73,6 +73,8 @@ State页的“状态恢复与历史回放”支持粘贴Bridge v1状态导出包
 可使用显式候选路径封装 `{"spec":"dsh-tavern-lwb/upstream-swipes","version":1,"floors":[{"floor":0,"selected":1,"records":[候选0的State2记录,候选1的State2记录]}]}`。楼层必须严格递增，selected必须存在；选中记录缺失/null会拒绝，不退回其它候选，明确无操作可提供`{"v":1,"entries":[]}`。整个封装64 KiB、最多100楼/200候选/128选中entry。预览显示原楼层与选择序号，只回放选定路径到当前基线，不重建目标游戏的原楼号或所有分支。
 
 公开 RPC `migration-preview` 可使用 `mode: "history-target-plan"`，传入显式 `upstream-swipes` 候选路径或稠密有序 `upstream-wal` 消息封装 `text`、当前 `expectedTextVersion` 和 `targets: [{floor, turn, textVersion}]`。来源楼层须与映射严格一一对应，不允许未映射楼层；选中记录必须存在。目标轮严格递增并绑定当前显示版本。结果区分该轮已有插件状态与回退到早轮的状态；逐楼报告来源选择、来源摘要、回放状态指纹、根数和变量数，只报告摘要不返回整份快照，不生成令牌、不写入，不是实际批量回填。
+
+批量回填 RPC：`history-batch-prepare` 接受 `gameId`、当前 `expectedTextVersion`、显式 WAL/swipe `text` 和完整 `targets` 映射，保存15分钟计划并返回令牌和目标摘要（会写游戏设置，不写轮状态）。`history-batch-commit` 使用同一局、当前版本及令牌，且须 `confirmReplace:true`；逐轮替换插件状态，保留同轮记忆，不改原生正文。中断会保留计划和已写前缀，用同令牌明确确认可续跑。`history-batch-discard` 按令牌清除计划，不撤销已写轮。现有旧格式记录需先迁移；跨实例并发没有CAS，回填期间不要同时运行另一插件实例。当前仅提供RPC，面板操作仍待接入。
 
 历史回放输入初始化文本和已完成轮次范围（最多100轮、正文总计256 KiB），只处理严格闭合`state`块；任何 partial/failed 都会停止预览。初始化文本或历史正文中出现旧 `plot-log`／`varevent` 标签（含带空白、大小写变化或未闭合的标记）也会拒绝整批，不写数据。预览结束时重查当前轮次与正文版本；确认时重新核对每条材料的轮次、原文摘要、正文版本和状态基线，材料缺失或变化则拒绝。预览15分钟有效，不自动调用模型。
 

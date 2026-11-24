@@ -2,6 +2,7 @@
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
 import { createStateService } from './host/service.mjs';
 import { createRecordStore } from './host/records.mjs';
+import { createHistoryBatchService } from './host/history-batch-service.mjs';
 import { createMemoryService, SUMMARY_TASK } from './host/memory-service.mjs';
 import { inspectVarevent, previewStaticVarevent } from './core/varevent.mjs';
 export const name = 'dsh-tavern-lwb';
@@ -16,10 +17,12 @@ export function apply(ctx) {
   const records = createRecordStore(tavern);
   const service = createStateService(records.stateApi, { withLock: records.withLock });
   const memory = createMemoryService(tavern, records, { readStateEngine: service.readEngine });
-  ctx.effect(() => async () => { const memoryDone = memory.dispose(); await service.dispose(); await records.dispose(); await memoryDone; });
+  const batch = createHistoryBatchService(tavern, records);
+  ctx.effect(() => async () => { batch.dispose(); const memoryDone = memory.dispose(); await service.dispose(); await records.dispose(); await memoryDone; });
   const handlers = { read: service.read, enable: service.enable, preview: service.preview,
     initialize: service.initialize, process: service.process, export: service.exportState,
-    'migration-preview': service.migrationPreview, 'migration-commit': service.migrationCommit };
+    'migration-preview': service.migrationPreview, 'migration-commit': service.migrationCommit,
+    'history-batch-prepare': batch.prepare, 'history-batch-commit': batch.commit, 'history-batch-discard': batch.discard };
   for (const [id, handler] of Object.entries(handlers)) tavern.handle(name + '/' + id, handler);
   tavern.handle(name + '/compat/varevent-inspect', ({ text } = {}) => inspectVarevent(text));
   tavern.handle(name + '/compat/varevent-static-preview', ({ text } = {}) => previewStaticVarevent(text));

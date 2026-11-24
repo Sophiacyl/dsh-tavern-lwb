@@ -216,6 +216,22 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.match(failed.summaryStatus.message, /from/);
   assert.equal(failed.record.revision, savedMemory);
   assert.equal(modelCalls, 2);
+  const batchInput = { expectedTextVersion: 'reply-v1',
+    targets: [{ floor: 0, turn: 1, textVersion: 'greeting' }, { floor: 1, turn: 2, textVersion: 'reply-v1' }],
+    text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [70, 80].map(hp => ({ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 角色: { 生命值: hp } }, source: 'text' }] }] })) }) };
+  const beforeBatch = await api.exportGame('synthetic-chat');
+  const preparedBatch = await call('history-batch-prepare', batchInput);
+  assert.equal(preparedBatch.targets.length, 2);
+  assert.equal((await call('read')).record.engine.variables.数据.角色.生命值, 90);
+  assert.equal((await call('memory/read')).record.revision, savedMemory);
+  await assert.rejects(call('history-batch-commit', { expectedTextVersion: 'reply-v1', token: preparedBatch.token }), { code: 'LWB_BATCH_PLAN' });
+  await assert.rejects(call('history-batch-commit', { gameId: 'synthetic-fork-game', expectedTextVersion: 'fork-reply', token: preparedBatch.token, confirmReplace: true }), { code: 'LWB_BATCH_PLAN' });
+  assert.deepEqual(await call('history-batch-commit', { expectedTextVersion: 'reply-v1', token: preparedBatch.token, confirmReplace: true }), { completed: 2, total: 2, status: 'committed' });
+  assert.equal((await call('read')).record.engine.variables.数据.角色.生命值, 80);
+  assert.equal((await call('memory/read')).record.revision, savedMemory);
+  assert.equal(modelCalls, 2, 'batch RPC never calls a model');
+  await assert.rejects(call('history-batch-commit', { expectedTextVersion: 'reply-v1', token: preparedBatch.token, confirmReplace: true }), { code: 'LWB_BATCH_PLAN' });
+  assert.notDeepEqual(await api.exportGame('synthetic-chat'), beforeBatch);
   // An independent plugin can backfill its own data on a current historical
   // version, but cannot materialize an absent turn or target a hidden version.
   let historyApi;
@@ -256,7 +272,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   await assert.rejects(call('read'), { code: 'TAVERN_PLUGIN_NOT_FOUND' });
   assert.equal((await api.turnContext({ gameId: 'synthetic-game', turn: 3, input: '继续' })).length, 0);
   assert.ok(warnings.length > 0, 'invalid-only task reaches host error observation');
-  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect') || message.includes('handle:dsh-tavern-lwb/migration-commit') || message.includes('handle:dsh-tavern-lwb/migration-preview')), JSON.stringify(warnings));
+  assert.ok(warnings.every(message => message.includes('后台任务') || message.includes('手动任务') || message.includes('handle:dsh-tavern-lwb/compat/varevent-inspect') || message.includes('handle:dsh-tavern-lwb/migration-commit') || message.includes('handle:dsh-tavern-lwb/migration-preview') || message.includes('handle:dsh-tavern-lwb/history-batch-commit')), JSON.stringify(warnings));
 });
 
 test('Cordis waits for the plugin asynchronous cleanup before unload completes', async t => {
