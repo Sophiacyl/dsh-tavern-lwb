@@ -2,7 +2,7 @@
 
 ## 0.1.0-beta.46
 
-- Require a one-to-one mapping for every source swipe floor in read-only history planning. Validate selected records before reading them and reject unselected or unmapped source floors.
+- Require a one-to-one mapping for every source swipe floor in read-only history planning. Validate selected records before reading them and reject unselected or unmapped source floors; verify the per-prefix summaries produce the identical final engine.
 
 ## 0.1.0-beta.45
 

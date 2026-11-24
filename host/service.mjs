@@ -254,17 +254,20 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
         if (envelope.floors.length !== mapping.length) fail('LWB_MIGRATION', '来源封装不得包含未映射楼层。');
         const sourceStates = [];
+        let prefixEngine = null;
         for (let index = 0; index < mapping.length; index++) {
           const chosen = selected[index];
           const floor = envelope.floors[index];
           if (!floor || !Array.isArray(floor.records) || chosen.selected < 0 || chosen.selected >= floor.records.length || !floor.records[chosen.selected]) fail('LWB_MIGRATION', '来源选中记录缺失。');
           const prefix = { ...envelope, floors: envelope.floors.slice(0, index + 1) };
           const stepEngine = parseStateBackup(JSON.stringify(prefix));
+          prefixEngine = stepEngine;
           sourceStates.push({ floor: mapping[index].floor, selected: chosen.selected,
             sourceHash: digest(JSON.stringify(floor.records[chosen.selected])),
             stateHash: digest(JSON.stringify(stepEngine)), roots: stepEngine.roots.length,
             variables: Object.keys(stepEngine.variables).length });
         }
+        if (JSON.stringify(prefixEngine) !== JSON.stringify(engine)) fail('LWB_MIGRATION', '逐楼摘要终态与来源封装最终回放结果不一致。');
         const rows = [];
         for (const [index, target] of mapping.entries()) {
           const material = await tavern.getTurn({ gameId, turn: target.turn }); live();
