@@ -114,6 +114,37 @@ test('sparse target writes a new exact state row while inherited memory remains 
   await records.dispose();
 });
 
+test('memory conflict on second target preserves confirmed prefix and stops suffix writes', async t => {
+  const f = await fixture(t), plan = await planFor(f), records = createRecordStore(f.tavern);
+  const callbacks0 = callbacks(f, records);
+  let count = 0;
+  const wrapped = { ...callbacks0, writeRow: async (...args) => {
+    await callbacks0.writeRow(...args);
+    if (++count === 1) await records.saveMemory({ gameId: 'synthetic-game', turn: 2, textVersion: 'synthetic-v2', data: { revision: 99, text: 'synthetic mid-batch change' } });
+  } };
+  await assert.rejects(records.withLock('synthetic-game', () => executeHistoryWritePlan(plan, wrapped)), { code: 'LWB_CONFLICT', completed: 1 });
+  assert.deepEqual(f.writes, [1, 2], 'second storage write is the concurrent memory edit, not batch state');
+  const rows = await f.load();
+  const row1 = await records.stateAt('synthetic-game', 1);
+  assert.equal(row1.turn, 1);
+  assert.equal(rows[2].data.memory.text, 'synthetic mid-batch change');
+  assert.equal(rows[2].data.state, null, 'batch state suffix was not written');
+  await records.dispose();
+});
+
+test('target version switch after prefix write stops and preserves written prefix only', async t => {
+  const f = await fixture(t), plan = await planFor(f), records = createRecordStore(f.tavern);
+  const base = callbacks(f, records); let changed = false;
+  const wrapped = { ...base, readMaterial: async turn => {
+    if (turn === 2 && f.writes.includes(1) && !changed) { materials[1].textVersion = 'synthetic-v2-new'; changed = true; }
+    return f.tavern.getTurn({ gameId: 'synthetic-game', turn });
+  } };
+  await assert.rejects(records.withLock('synthetic-game', () => executeHistoryWritePlan(plan, wrapped)), { code: 'LWB_STALE', completed: 1 });
+  assert.deepEqual(f.writes, [1]);
+  materials[1].textVersion = 'synthetic-v2';
+  await records.dispose();
+});
+
 test('changed memory preimage after preview blocks all writes through record adapter', async t => {
   const f = await fixture(t), plan = await planFor(f);
   const records = createRecordStore(f.tavern);

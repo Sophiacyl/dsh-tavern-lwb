@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.51
+
+- Extend synthetic record-storage verification to mid-batch memory conflicts and target-version switches. Confirm only the verified prefix remains and no later state suffix is written; production RPC remains unregistered.
+
 ## 0.1.0-beta.50
 
 - Retain host-agnostic batch coordinator in the runtime package with explicit trust-boundary documentation. It remains unreferenced by the plugin entry point; no batch write RPC, persistent plan store, or cross-instance CAS is enabled.
