@@ -60,6 +60,9 @@ export function createHistoryBatchService(tavern, records, { now = Date.now } = 
         return result;
       });
     },
+    inspect({ gameId } = {}) {
+      return records.withLock(gameId, () => { live(); return plans.inspect({ gameId }); });
+    },
     discard({ gameId, token } = {}) {
       return records.withLock(gameId, () => { live(); return plans.clear({ gameId, token }); });
     },

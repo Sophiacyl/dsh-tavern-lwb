@@ -222,6 +222,10 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   const beforeBatch = await api.exportGame('synthetic-chat');
   const preparedBatch = await call('history-batch-prepare', batchInput);
   assert.equal(preparedBatch.targets.length, 2);
+  const resumedSummary = await call('history-batch-inspect');
+  assert.equal(resumedSummary.token, preparedBatch.token);
+  assert.equal(Object.hasOwn(resumedSummary, 'steps'), false);
+  assert.equal(resumedSummary.targets.length, 2);
   assert.equal((await call('read')).record.engine.variables.数据.角色.生命值, 90);
   assert.equal((await call('memory/read')).record.revision, savedMemory);
   await assert.rejects(call('history-batch-commit', { expectedTextVersion: 'reply-v1', token: preparedBatch.token }), { code: 'LWB_BATCH_PLAN' });
@@ -230,6 +234,7 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.equal((await call('read')).record.engine.variables.数据.角色.生命值, 80);
   assert.equal((await call('memory/read')).record.revision, savedMemory);
   assert.equal(modelCalls, 2, 'batch RPC never calls a model');
+  assert.equal(await call('history-batch-inspect'), null);
   await assert.rejects(call('history-batch-commit', { expectedTextVersion: 'reply-v1', token: preparedBatch.token, confirmReplace: true }), { code: 'LWB_BATCH_PLAN' });
   assert.notDeepEqual(await api.exportGame('synthetic-chat'), beforeBatch);
   // An independent plugin can backfill its own data on a current historical

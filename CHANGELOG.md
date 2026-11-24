@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.57
+
+- Add history-batch-inspect to recover a persisted plan's token and target summaries without returning raw text or complete state. Expired plans remain inspectable and require explicit cleanup; inspection does not write or execute.
+
 ## 0.1.0-beta.56
 
 - Register history-batch-prepare/commit/discard with lifecycle cleanup. Pinned public API 7/8 synthetic tests confirm explicit confirmation, cross-game token rejection, parent-linked state writes, preserved memory and no model calls.

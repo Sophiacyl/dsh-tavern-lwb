@@ -11,12 +11,12 @@ const { readPluginArchive } = await import(referenceModule('api8', 'domain/user-
 const root = new URL('../', import.meta.url).pathname;
 
 test('distributed ZIP passes actual Tavern parser, contains required licenses and runs standalone without research imports', async t => {
-  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.56.zip'));
+  const archive = await readFile(path.join(root, 'dist/dsh-tavern-lwb-0.1.0-beta.57.zip'));
   const manifest = JSON.parse(await readFile(path.join(root, 'dist/manifest.json')));
   assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.sha256);
   const { pkg, files } = readPluginArchive(archive);
   assert.equal(pkg.name, 'dsh-tavern-lwb');
-  assert.equal(pkg.version, '0.1.0-beta.56');
+  assert.equal(pkg.version, '0.1.0-beta.57');
   assert.equal(pkg.dependencies, undefined);
   assert.equal(archive.length, manifest.bytes);
   assert.deepEqual([...files.keys()].sort(), manifest.files.map(item => item.path).sort());
@@ -44,8 +44,8 @@ test('distributed ZIP passes actual Tavern parser, contains required licenses an
     handle(id) { registrations.push(id); }, turnSection() {}, settlementTask() {}, manualTask() {}, startTask() {}, getHistory() {},
   };
   entry.apply({ tavern, effect() {} });
-  assert.equal(registrations.length, 21);
-  for (const method of ['prepare', 'commit', 'discard']) assert.ok(registrations.includes(pkg.name + '/history-batch-' + method));
+  assert.equal(registrations.length, 22);
+  for (const method of ['prepare', 'commit', 'discard', 'inspect']) assert.ok(registrations.includes(pkg.name + '/history-batch-' + method));
   assert.ok(registrations.includes(pkg.name + '/compat/varevent-static-preview'));
   assert.ok(registrations.includes(pkg.name + '/compat/varevent-inspect'));
   assert.ok(registrations.includes(pkg.name + '/migration-preview'));

@@ -44,6 +44,22 @@ test('plan rejects wrong game/version, modified steps and expiry without modifyi
   assert.equal(f.writes(), 1, 'invalid loads never write or silently remove expired work');
   await f.store.clear({ gameId: 'a', token: saved.token });
 });
+test('inspect recovers only metadata and retains expired plans without writes', async () => {
+  const f = fixture();
+  assert.equal(await f.store.inspect({ gameId: 'a' }), null);
+  const saved = await f.store.save({ gameId: 'a', turn: 3, textVersion: 'v3', steps: f.steps });
+  const restored = createHistoryPlanStore(f.dependencies);
+  const summary = await restored.inspect({ gameId: 'a' });
+  assert.equal(summary.token, saved.token);
+  assert.equal(summary.expired, false);
+  assert.equal(Object.hasOwn(summary, 'steps'), false);
+  assert.equal(Object.hasOwn(summary.targets[0], 'rawText'), false);
+  assert.equal(Object.hasOwn(summary.targets[0], 'data'), false);
+  f.tick();
+  assert.equal((await restored.inspect({ gameId: 'a' })).expired, true);
+  assert.equal(f.writes(), 1);
+  assert.ok(f.configs.get('a').historyWritePlan);
+});
 test('plan size budget fails before persistence', async () => {
   const f = fixture();
   await assert.rejects(f.store.save({ gameId: 'a', turn: 1, textVersion: 'v1', steps: [{ data: 'x'.repeat(270000) }] }), { code: 'LWB_BATCH_PLAN' });

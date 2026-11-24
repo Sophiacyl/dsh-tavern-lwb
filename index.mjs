@@ -22,7 +22,8 @@ export function apply(ctx) {
   const handlers = { read: service.read, enable: service.enable, preview: service.preview,
     initialize: service.initialize, process: service.process, export: service.exportState,
     'migration-preview': service.migrationPreview, 'migration-commit': service.migrationCommit,
-    'history-batch-prepare': batch.prepare, 'history-batch-commit': batch.commit, 'history-batch-discard': batch.discard };
+    'history-batch-prepare': batch.prepare, 'history-batch-commit': batch.commit, 'history-batch-discard': batch.discard,
+    'history-batch-inspect': batch.inspect };
   for (const [id, handler] of Object.entries(handlers)) tavern.handle(name + '/' + id, handler);
   tavern.handle(name + '/compat/varevent-inspect', ({ text } = {}) => inspectVarevent(text));
   tavern.handle(name + '/compat/varevent-static-preview', ({ text } = {}) => previewStaticVarevent(text));

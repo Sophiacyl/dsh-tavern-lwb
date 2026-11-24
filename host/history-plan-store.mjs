@@ -17,11 +17,11 @@ export function createHistoryPlanStore({ readGameData, saveGameData, withLock, n
     if (value !== null && (!value || typeof value !== 'object' || Array.isArray(value))) fail('游戏设置格式无效。');
     return value ?? {};
   }
-  function validate(plan, gameId, token) {
+  function validate(plan, gameId, token, allowExpired = false) {
     if (!plan || plan.spec !== SPEC || plan.version !== 1 || plan.gameId !== gameId || plan.token !== token ||
         !Number.isSafeInteger(plan.turn) || plan.turn < 1 || typeof plan.textVersion !== 'string' || !plan.textVersion ||
         !Number.isSafeInteger(plan.createdAt) || !Number.isSafeInteger(plan.expiresAt) || plan.expiresAt - plan.createdAt !== TTL ||
-        plan.createdAt > now() || plan.expiresAt <= now() || !Array.isArray(plan.steps) || !plan.steps.length || plan.steps.length > 100 ||
+        plan.createdAt > now() || (!allowExpired && plan.expiresAt <= now()) || !Array.isArray(plan.steps) || !plan.steps.length || plan.steps.length > 100 ||
         hash(plan.steps) !== plan.stepsHash || Buffer.byteLength(JSON.stringify(plan)) > MAX_BYTES) fail('计划缺失、过期或内容校验失败。');
     return structuredClone(plan);
   }
@@ -50,6 +50,18 @@ export function createHistoryPlanStore({ readGameData, saveGameData, withLock, n
         const plan = validate((await config(gameId))[KEY], gameId, token);
         if (plan.turn !== turn || plan.textVersion !== textVersion) fail('当前轮次或正文版本与计划不符。');
         return plan;
+      });
+    },
+    async inspect({ gameId }) {
+      game(gameId);
+      return withLock(gameId, async () => {
+        const raw = (await config(gameId))[KEY];
+        if (!raw) return null;
+        if (typeof raw.token !== 'string' || !raw.token) fail('计划令牌损坏。');
+        const plan = validate(raw, gameId, raw.token, true);
+        return { token: plan.token, turn: plan.turn, textVersion: plan.textVersion, expiresAt: plan.expiresAt,
+          expired: plan.expiresAt <= now(), targets: plan.steps.map(step => ({ turn: step.turn,
+            textVersion: step.textVersion, replacesExisting: step.beforeDigest !== null, outputDigest: step.outputDigest })) };
       });
     },
     async clear({ gameId, token }) {
