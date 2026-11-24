@@ -42,6 +42,6 @@ PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$PWD/tests/.browsers}" \
 node tests/mobile-layout.mjs
 ```
 
-`node tests/mobile-layout.mjs` 默认使用 `tests/.browsers`，也尊重 `PLAYWRIGHT_BROWSERS_PATH`。浏览器由 Playwright 默认机制查找，不固定 revision 或 x86 路径，支持其提供的 Linux ARM64 headless Chromium。测试使用工作区内独立浏览器 HOME，在断网合成侧栏检查 390×844 手机布局的触摸滚动、底部按钮和浮钮间隔，截图输出至 `tests/layout-output`。这里没有实体 Android WebView 或真实 profile 安装测试。
+`node tests/mobile-layout.mjs` 默认使用 `tests/.browsers`，也尊重 `PLAYWRIGHT_BROWSERS_PATH`。浏览器由 Playwright 默认机制查找，不固定 revision 或 x86 路径，支持其提供的 Linux ARM64 headless Chromium。测试使用工作区内独立浏览器 HOME，在断网合成侧栏检查 390×844 手机布局的触摸滚动、底部按钮和浮钮间隔，截图输出至 `tests/layout-output`。批量面板额外载入30条合成目标摘要，检查确认按钮44像素高、命中测试不被浮钮遮挡，恢复摘要及取消确认只调用inspect；截图为 `batch-390x844.png`。这里没有实体 Android WebView 或真实 profile 安装测试。
 
 所有临时目录、npm 缓存、参考 checkout、浏览器和截图均应保持为本地忽略文件。测试通过的范围以验证记录为准。

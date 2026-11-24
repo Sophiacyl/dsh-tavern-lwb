@@ -49,6 +49,34 @@ try {
     await page.screenshot({ path: output + '/' + (tab === 'State' ? 'state' : 'memory') + '-390x844.png', fullPage: false });
     report.push({ tab, metrics, button: box });
   }
+  await page.getByRole('tab', { name: 'State', exact: true }).click();
+  await page.getByText('批量历史状态回填', { exact: true }).click();
+  await page.evaluate(() => {
+    const original = window.ui.callHost;
+    window.batchCalls = [];
+    window.ui.callHost = async function(name, args) {
+      if (name.includes('/history-batch-')) {
+        window.batchCalls.push({ name, args });
+        if (name.endsWith('/history-batch-inspect')) return { token: 'synthetic-layout-token', turn: 3, textVersion: 'v3', expired: false,
+          targets: Array.from({ length: 30 }, (_, i) => ({ turn: i + 1, textVersion: 'synthetic-' + i, replacesExisting: true, outputDigest: 'a'.repeat(64) })) };
+        throw Error('No batch mutation is permitted in layout fixture');
+      }
+      return original.call(this, name, args);
+    };
+  });
+  await page.getByRole('button', { name: '查看或恢复回填计划', exact: true }).click();
+  const confirmBatch = page.getByRole('button', { name: '确认执行或续跑回填', exact: true });
+  await confirmBatch.waitFor();
+  await confirmBatch.scrollIntoViewIfNeeded();
+  const batchBox = await confirmBatch.boundingBox();
+  const hit = await confirmBatch.evaluate(el => { const r = el.getBoundingClientRect(); const found = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return found === el || el.contains(found); });
+  if (!hit || batchBox.y < 52 || batchBox.y + batchBox.height >= 784) throw Error('Batch confirm is obscured: ' + JSON.stringify(batchBox));
+  page.once('dialog', dialog => dialog.dismiss());
+  await confirmBatch.click();
+  const batchCalls = await page.evaluate(() => window.batchCalls.map(call => call.name));
+  if (batchCalls.some(name => !name.endsWith('/history-batch-inspect'))) throw Error('Restoration or cancelled confirmation mutated batch state');
+  await page.screenshot({ path: output + '/batch-390x844.png', fullPage: false });
+  report.push({ tab: '批量回填', button: batchBox, unobscured: hit, calls: batchCalls });
   if (errors.length) throw Error(errors.join('\n'));
   console.log(JSON.stringify({ ok: true, viewport: '390x844', report }, null, 2));
 } finally { await browser.close(); }
