@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { executeHistoryWritePlan, historyPlanDigest } from '../core/history-batch.mjs';
 
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const exact = (row, target) => row?.turn === target.turn && row.textVersion === target.textVersion;
@@ -38,6 +39,39 @@ function fixture() {
   }
   return { materials, rows, plan, observe, write, classify: () => classify(plan, observe()) };
 }
+
+test('batch coordinator preflights all rows, writes exact prefix, and confirms every write', async () => {
+  const materials = new Map([1, 2].map(turn => [turn, { turn, textVersion: `v${turn}`, rawText: `body-${turn}` }]));
+  const rows = new Map(), writes = [];
+  const plan = [1, 2].map(turn => ({ turn, textVersion: `v${turn}`, rawText: `body-${turn}`, sourceDigest: fingerprint(`body-${turn}`), data: { n: turn }, outputDigest: historyPlanDigest({ n: turn }), beforeDigest: null }));
+  const result = await executeHistoryWritePlan(plan, {
+    readMaterial: async turn => materials.get(turn), readRow: async turn => rows.get(turn) || null,
+    writeRow: async (turn, textVersion, data) => { writes.push(turn); rows.set(turn, { turn, textVersion, data }); },
+  });
+  assert.deepEqual(result, { completed: 2, total: 2, status: 'committed' });
+  assert.deepEqual(writes, [1, 2]);
+  assert.deepEqual(await executeHistoryWritePlan(plan, {
+    readMaterial: async turn => materials.get(turn), readRow: async turn => rows.get(turn) || null,
+    writeRow: async () => { throw new Error('must skip exact rows'); },
+  }), { completed: 2, total: 2, status: 'committed' });
+});
+
+test('batch coordinator performs no writes when any preflight source conflicts', async () => {
+  const materials = new Map([[1, { turn: 1, textVersion: 'v1', rawText: 'changed' }]]), rows = new Map(), writes = [];
+  const plan = [{ turn: 1, textVersion: 'v1', rawText: 'body', sourceDigest: fingerprint('body'), data: { n: 1 }, outputDigest: historyPlanDigest({ n: 1 }), beforeDigest: null }];
+  await assert.rejects(executeHistoryWritePlan(plan, { readMaterial: async turn => materials.get(turn), readRow: async () => null, writeRow: async () => writes.push(1) }), { code: 'LWB_STALE' });
+  assert.deepEqual(writes, []);
+});
+
+test('batch coordinator stops after a write cannot be confirmed', async () => {
+  const materials = new Map([1, 2].map(turn => [turn, { turn, textVersion: `v${turn}`, rawText: `body-${turn}` }]));
+  const rows = new Map(), writes = [];
+  const plan = [1, 2].map(turn => ({ turn, textVersion: `v${turn}`, rawText: `body-${turn}`, sourceDigest: fingerprint(`body-${turn}`), data: { n: turn }, outputDigest: historyPlanDigest({ n: turn }), beforeDigest: null }));
+  await assert.rejects(executeHistoryWritePlan(plan, { readMaterial: async turn => materials.get(turn), readRow: async turn => rows.get(turn) || null,
+    writeRow: async (turn, textVersion, data) => { writes.push(turn); if (turn !== 1) rows.set(turn, { turn, textVersion, data }); },
+  }), { code: 'LWB_WRITE_UNKNOWN' });
+  assert.deepEqual(writes, [1]);
+});
 
 test('history resume recognizes a write whose acknowledgement was lost, not a fallback row', () => {
   const f = fixture();
