@@ -238,6 +238,8 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
       if (mode === 'history-target-plan') {
         if (!Array.isArray(targets) || !targets.length || targets.length > 100 || typeof text !== 'string') fail('LWB_MIGRATION', '需提供来源封装和1至100个显式目标轮。');
         let previous = -1, previousTurn = 0;
+        const totalSpan = targets.length ? targets[targets.length - 1]?.turn - targets[0]?.turn : 0;
+        if (totalSpan > 2000) fail('LWB_MIGRATION', '目标轮跨度超过宿主历史安全上限，请分段规划。');
         const mapping = Array.from(targets, item => {
           if (!item || typeof item !== 'object' || Array.isArray(item) ||
               Object.keys(item).some(key => !['floor', 'turn', 'textVersion'].includes(key)) ||
