@@ -274,6 +274,25 @@ test('history target plan rechecks a target state changed during planning', asyn
   f.tavern.readTurnData = async input => { const row = await original(input); if (++reads === 2) { const data = structuredClone(row.data); data.sourceDigest = 'changed'; f.documents.set(JSON.stringify(['a', 2, 'v2']), data); return { turn: row.turn, textVersion: row.textVersion, data }; } return row; };
   await assert.rejects(f.service.migrationPreview(args), { code: 'LWB_STALE' });
 });
+test('history target plan supports explicit WAL source floors with dense mapping', async () => {
+  const f = fixture(); await start(f); f.show('a', 2, 'v2', 'synthetic target');
+  const records = [
+    { v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 2 }, source: 'text' }] }] },
+    { v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'inc', path: '数据.金币', delta: 3, source: 'text' }] }] },
+  ];
+  const args = { gameId: 'a', expectedTextVersion: 'v2', mode: 'history-target-plan',
+    text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records }),
+    targets: [{ floor: 0, turn: 1, textVersion: 'greeting-a' }, { floor: 1, turn: 2, textVersion: 'v2' }] };
+  const before = structuredClone(f.documents);
+  const plan = await f.service.migrationPreview(args);
+  assert.deepEqual(plan.report.map(row => row.floor), [0, 1]);
+  assert.equal(plan.report[0].source.roots, 1);
+  assert.equal(plan.report[1].source.stateHash.length, 64);
+  assert.equal(plan.writable, false);
+  assert.equal(Object.hasOwn(plan, 'token'), false);
+  assert.deepEqual(f.documents, before);
+  await assert.rejects(f.service.migrationPreview({ ...args, targets: [{ floor: 1, turn: 1, textVersion: 'greeting-a' }, { floor: 0, turn: 2, textVersion: 'v2' }] }), { code: 'LWB_MIGRATION' });
+});
 test('history target plan distinguishes exact state from fallback and cannot be committed', async () => {
   const f = fixture(); await start(f);
   f.show('a', 2, 'v2', '合成目标正文');

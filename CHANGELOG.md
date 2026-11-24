@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.48
+
+- Extend read-only history target planning to dense explicit upstream WAL source records as well as swipe mappings. Keep each record mapped to an existing turn and current text version; do not enable backfill writes.
+
 ## 0.1.0-beta.47
 
 - Keep history-target-plan responses summary-only: remove the full replay engine and expose only the final per-prefix digest summary, preserving the no-write planning boundary.

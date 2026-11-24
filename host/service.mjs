@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.47';
+export const VERSION = '0.1.0-beta.48';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -250,16 +250,21 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         let selected = [];
         const engine = parseStateBackup(text, { onSelection: rows => { selected = rows; } });
         const envelope = JSON.parse(text);
-        if (envelope.spec !== 'dsh-tavern-lwb/upstream-swipes' || !Array.isArray(envelope.floors)) fail('LWB_MIGRATION', '只读目标规划目前只接受显式swipe楼层封装。');
+        const isSwipes = envelope.spec === 'dsh-tavern-lwb/upstream-swipes' && Array.isArray(envelope.floors);
+        const isWal = envelope.spec === 'dsh-tavern-lwb/upstream-wal' && Array.isArray(envelope.records);
+        if (!isSwipes && !isWal) fail('LWB_MIGRATION', '只读目标规划仅接受显式swipe或WAL封装。');
+        if (isWal) selected = envelope.records.map((_record, index) => ({ floor: index, selected: 0 }));
         if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
-        if (envelope.floors.length !== mapping.length) fail('LWB_MIGRATION', '来源封装不得包含未映射楼层。');
+        const sourceFloors = isSwipes ? envelope.floors : envelope.records.map((record, floor) => ({ floor, selected: 0, records: [record] }));
+        if (sourceFloors.length !== mapping.length) fail('LWB_MIGRATION', '来源封装不得包含未映射楼层。');
         const sourceStates = [];
         let prefixEngine = null;
         for (let index = 0; index < mapping.length; index++) {
           const chosen = selected[index];
-          const floor = envelope.floors[index];
+          const floor = sourceFloors[index];
           if (!floor || !Array.isArray(floor.records) || chosen.selected < 0 || chosen.selected >= floor.records.length || !floor.records[chosen.selected]) fail('LWB_MIGRATION', '来源选中记录缺失。');
-          const prefix = { ...envelope, floors: envelope.floors.slice(0, index + 1) };
+          const prefix = isSwipes ? { ...envelope, floors: envelope.floors.slice(0, index + 1) }
+            : { ...envelope, records: envelope.records.slice(0, index + 1) };
           const stepEngine = parseStateBackup(JSON.stringify(prefix));
           prefixEngine = stepEngine;
           sourceStates.push({ floor: mapping[index].floor, selected: chosen.selected,
