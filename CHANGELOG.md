@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.52
+
+- Add an internal, unconnected batch plan store with game/turn/version binding, 15-minute expiry, detached reload, digest checks and token-specific cleanup. Preserve unrelated game settings and refuse replacement of an outstanding plan. No public batch RPC is registered.
+
 ## 0.1.0-beta.51
 
 - Extend synthetic record-storage verification to mid-batch memory conflicts and target-version switches. Confirm only the verified prefix remains and no later state suffix is written; production RPC remains unregistered.
