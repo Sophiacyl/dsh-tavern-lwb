@@ -292,6 +292,7 @@ test('history target plan supports explicit WAL source floors with dense mapping
   assert.equal(Object.hasOwn(plan, 'token'), false);
   assert.deepEqual(f.documents, before);
   await assert.rejects(f.service.migrationPreview({ ...args, targets: [{ floor: 1, turn: 1, textVersion: 'greeting-a' }, { floor: 0, turn: 2, textVersion: 'v2' }] }), { code: 'LWB_MIGRATION' });
+  await assert.rejects(f.service.migrationPreview({ ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [records[0], null] }) }), { code: 'LWB_MIGRATION' });
 });
 test('history target plan distinguishes exact state from fallback and cannot be committed', async () => {
   const f = fixture(); await start(f);

@@ -253,7 +253,10 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         const isSwipes = envelope.spec === 'dsh-tavern-lwb/upstream-swipes' && Array.isArray(envelope.floors);
         const isWal = envelope.spec === 'dsh-tavern-lwb/upstream-wal' && Array.isArray(envelope.records);
         if (!isSwipes && !isWal) fail('LWB_MIGRATION', '只读目标规划仅接受显式swipe或WAL封装。');
-        if (isWal) selected = envelope.records.map((_record, index) => ({ floor: index, selected: 0 }));
+        if (isWal) {
+          if (envelope.records.some(record => record === null || !record || typeof record !== 'object')) fail('LWB_MIGRATION', 'WAL来源记录不能缺失或为null。');
+          selected = envelope.records.map((_record, index) => ({ floor: index, selected: 0 }));
+        }
         if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
         const sourceFloors = isSwipes ? envelope.floors : envelope.records.map((record, floor) => ({ floor, selected: 0, records: [record] }));
         if (sourceFloors.length !== mapping.length) fail('LWB_MIGRATION', '来源封装不得包含未映射楼层。');
