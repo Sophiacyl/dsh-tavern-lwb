@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.58 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.59 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.58'
+    const VERSION = '0.1.0-beta.59'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
@@ -77,7 +77,7 @@ window.__ModuleLoader__.load({
         error ? h('p', { role: 'alert' }, error) : null,
         h('label', null, '批量来源JSON', h('textarea', { 'aria-label': '批量来源JSON', style: styles.textarea, value: source, disabled: busy, onChange: e => setSource(e.target.value) })),
         h('label', null, '目标映射JSON', h('textarea', { 'aria-label': '目标映射JSON', style: styles.textarea, value: mapping, disabled: busy, onChange: e => setMapping(e.target.value) })),
-        h('p', { style: styles.muted }, '映射格式：[{"floor":0,"turn":1,"textVersion":"目标当前版本"}]；WAL floor从0计数。'),
+        h('p', { style: styles.muted }, '映射格式：[{"floor":0,"turn":1,"textVersion":"目标当前版本"}]；WAL floor从0计数；写入目标轮必须连续。'),
         h('button', { style: styles.button, disabled: !allowed || !!plan || !source.trim(), onClick: () => act('prepare') }, '准备并保存回填计划'),
         h('button', { style: styles.button, disabled: busy, onClick: () => act('inspect') }, '查看或恢复回填计划'),
         plan ? h('div', null,

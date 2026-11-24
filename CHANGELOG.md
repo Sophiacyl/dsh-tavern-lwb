@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.59
+
+- Require contiguous target turns for executable batch plans so intervening existing states cannot invalidate the generated parent chain. Read-only target planning can still inspect sparse mappings.
+
 ## 0.1.0-beta.58
 
 - Add a batch history panel for explicit source/mapping input, plan preparation, metadata recovery, confirmed execution/resume and token-specific discard. Restoring metadata never submits writes; switching games clears the local plan scope.

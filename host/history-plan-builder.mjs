@@ -18,8 +18,8 @@ export async function buildHistoryWritePlan({ gameId, text, targets, planId, rea
   const mapping = structuredClone(targets);
   for (const [index, target] of mapping.entries()) {
     if (!target || target.floor !== floors[index].floor || !Number.isSafeInteger(target.turn) || target.turn < 1 ||
-        (index && target.turn <= mapping[index - 1].turn) || typeof target.textVersion !== 'string' || !target.textVersion ||
-        floors[index].records[floors[index].selected] == null) fail('目标顺序、来源选择或正文版本无效。');
+        (index && target.turn !== mapping[index - 1].turn + 1) || typeof target.textVersion !== 'string' || !target.textVersion ||
+        floors[index].records[floors[index].selected] == null) fail('写入目标须为连续轮次，且来源选择及正文版本须明确有效。');
   }
   const steps = [];
   let parent = null, total = 0;

@@ -20,6 +20,14 @@ function fixture() {
     text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [1, 2].map(n => ({ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { n }, source: 'text' }] }] })) }) };
   return { tavern, args, rows, writes, config: () => config, busy: value => { busy = value; }, lose: () => { lose = true; } };
 }
+test('batch prepare rejects gapped target chain before persisting or writing', async () => {
+  const f = fixture(), records = createRecordStore(f.tavern);
+  const service = createHistoryBatchService(f.tavern, records, { now: () => 1 });
+  const targets = [{ floor: 0, turn: 1, textVersion: 'v1' }, { floor: 1, turn: 3, textVersion: 'v3' }];
+  await assert.rejects(service.prepare({ ...f.args, targets }), { code: 'LWB_BATCH_PLAN', message: /连续轮次/ });
+  assert.deepEqual(f.writes, []); assert.equal(f.config().historyWritePlan, undefined);
+  service.dispose(); await records.dispose();
+});
 test('internal service prepares, explicitly confirms and reads valid lineage without nested lock deadlock', async () => {
   const f = fixture(), records = createRecordStore(f.tavern);
   const service = createHistoryBatchService(f.tavern, records, { now: () => 1 });
