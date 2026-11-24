@@ -255,6 +255,25 @@ test('selected swipe mapping is visible before confirmation and does not query s
   assert.equal((await f.service.readEngine('a', 1)).variables.数据.金币, 3);
 });
 
+test('history target plan rechecks every source and target snapshot before returning', async () => {
+  const f = fixture(); await start(f); f.show('a', 2, 'v2', 'synthetic history');
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }] });
+  const args = { gameId: 'a', expectedTextVersion: 'v2', mode: 'history-target-plan', text, targets: [{ floor: 5, turn: 2, textVersion: 'v2' }] };
+  const original = f.tavern.getTurn; let calls = 0;
+  f.tavern.getTurn = async input => { if (++calls === 2) f.show('a', 2, 'v2', 'changed during plan'); return original(input); };
+  const before = structuredClone(f.documents);
+  await assert.rejects(f.service.migrationPreview(args), { code: 'LWB_STALE' });
+  assert.deepEqual(f.documents, before);
+});
+test('history target plan rechecks a target state changed during planning', async () => {
+  const f = fixture(); await start(f); f.show('a', 2, 'v2', 'synthetic history');
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }] });
+  const args = { gameId: 'a', expectedTextVersion: 'v2', mode: 'history-target-plan', text, targets: [{ floor: 5, turn: 2, textVersion: 'v2' }] };
+  await f.service.process({ gameId: 'a', expectedTextVersion: 'v2' });
+  const original = f.tavern.readTurnData; let reads = 0;
+  f.tavern.readTurnData = async input => { const row = await original(input); if (++reads === 2) { const data = structuredClone(row.data); data.sourceDigest = 'changed'; f.documents.set(JSON.stringify(['a', 2, 'v2']), data); return { turn: row.turn, textVersion: row.textVersion, data }; } return row; };
+  await assert.rejects(f.service.migrationPreview(args), { code: 'LWB_STALE' });
+});
 test('history target plan distinguishes exact state from fallback and cannot be committed', async () => {
   const f = fixture(); await start(f);
   f.show('a', 2, 'v2', '合成目标正文');
@@ -277,8 +296,8 @@ test('history target plan distinguishes exact state from fallback and cannot be 
   assert.deepEqual(plan.final, plan.report.at(-1).source);
   assert.deepEqual(plan.report.map(row => row.source.stateHash), plan.report.map(row => row.source.stateHash).filter(Boolean));
   for (const bad of [
-    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 9, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
-    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 1, records: [null] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
+    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }, { floor: 9, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }] }) },
+    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 1, records: [null] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 1 }, source: 'text' }] }] }] }] }) },
   ]) await assert.rejects(f.service.migrationPreview(bad), { code: 'LWB_MIGRATION' });
   assert.deepEqual(f.documents, before, 'invalid source envelope cannot write state');
   await assert.rejects(f.service.migrationCommit({ ...args, token: plan.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
