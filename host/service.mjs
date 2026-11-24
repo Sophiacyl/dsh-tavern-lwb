@@ -268,15 +268,26 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
             variables: Object.keys(stepEngine.variables).length });
         }
         if (JSON.stringify(prefixEngine) !== JSON.stringify(engine)) fail('LWB_MIGRATION', '逐楼摘要终态与来源封装最终回放结果不一致。');
-        const rows = [];
+        const rows = [], observed = [];
         for (const [index, target] of mapping.entries()) {
           const material = await tavern.getTurn({ gameId, turn: target.turn }); live();
           if (!material || material.turn !== target.turn || material.textVersion !== target.textVersion || typeof material.rawText !== 'string') fail('LWB_STALE', '目标正文不存在或版本已变化，请重新规划。');
           const row = await tavern.readTurnData({ gameId, turn: target.turn }); live();
           if (row && (row.turn > target.turn || (row.turn === target.turn && row.textVersion !== target.textVersion))) fail('LWB_STALE', '目标状态记录与当前正文不一致。');
+          const exactStateHash = row?.turn === target.turn ? digest(JSON.stringify(row)) : null;
+          observed.push({ ...target, sourceDigest: digest(material.rawText), exactStateHash });
           rows.push({ ...target, selected: selected[index].selected, hasExactState: row?.turn === target.turn,
-            targetStateHash: row?.turn === target.turn ? digest(JSON.stringify(row)) : null,
-            source: sourceStates[index] });
+            targetStateHash: exactStateHash, source: sourceStates[index] });
+        }
+        // Confirm no historical row changed while this multi-turn read-only plan was being assembled.
+        for (const snapshot of observed) {
+          const material = await tavern.getTurn({ gameId, turn: snapshot.turn }); live();
+          if (!material || material.turn !== snapshot.turn || material.textVersion !== snapshot.textVersion ||
+              typeof material.rawText !== 'string' || digest(material.rawText) !== snapshot.sourceDigest) fail('LWB_STALE', '规划期间目标历史正文已变化，请重新规划。');
+          const row = await tavern.readTurnData({ gameId, turn: snapshot.turn }); live();
+          if (row && (row.turn > snapshot.turn || (row.turn === snapshot.turn && row.textVersion !== snapshot.textVersion))) fail('LWB_STALE', '规划期间目标状态版本已变化。');
+          const exactStateHash = row?.turn === snapshot.turn ? digest(JSON.stringify(row)) : null;
+          if (exactStateHash !== snapshot.exactStateHash) fail('LWB_STALE', '规划期间目标轮状态已变化。');
         }
         const fresh = await current(gameId, expectedTextVersion);
         if (fresh.turn !== state.turn) fail('LWB_STALE', '规划期间当前轮已变化。');
