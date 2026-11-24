@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.54
+
+- Connect plan building, persistence and execution in an internal host service with prepare/commit/discard, explicit confirmation and one per-game lock. Preserve plans after uncertain writes for instance-recreated resume. Public RPC registration remains disabled.
+
 ## 0.1.0-beta.53
 
 - Add an internal WAL/swipe-to-write-plan builder with explicit targets, memory-preserving envelopes, parent-linked states, source/preimage/output digests and bounded plan sizes. Synthetic integration now exercises builder → persisted reload → coordinator → production record adapter. Public batch confirmation remains unregistered.
