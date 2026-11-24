@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.46';
+export const VERSION = '0.1.0-beta.47';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -280,8 +280,8 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         }
         const fresh = await current(gameId, expectedTextVersion);
         if (fresh.turn !== state.turn) fail('LWB_STALE', '规划期间当前轮已变化。');
-        return { mode: 'history-target-plan', report: rows, engine, turn: state.turn, textVersion: state.textVersion,
-          writable: false, message: '仅核对现有目标正文及插件状态，不建立回填计划令牌，不写入任何轮。' };
+        return { mode: 'history-target-plan', report: rows, final: sourceStates.at(-1), turn: state.turn, textVersion: state.textVersion,
+          writable: false, message: '仅核对现有目标正文及插件状态，不返回完整快照、不建立回填计划令牌、不写入任何轮。' };
       }
       const oldRow = await tavern.readTurnData({ gameId, turn: state.turn });
       const old = oldRow ? { stateHash: digest(JSON.stringify(oldRow)) } : null;

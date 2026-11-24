@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.47
+
+- Keep history-target-plan responses summary-only: remove the full replay engine and expose only the final per-prefix digest summary, preserving the no-write planning boundary.
+
 ## 0.1.0-beta.46
 
 - Require a one-to-one mapping for every source swipe floor in read-only history planning. Validate selected records before reading them and reject unselected or unmapped source floors; verify the per-prefix summaries produce the identical final engine.

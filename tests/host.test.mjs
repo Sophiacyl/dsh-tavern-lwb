@@ -273,7 +273,8 @@ test('history target plan distinguishes exact state from fallback and cannot be 
     { floor: 5, selected: 0, turn: 1, textVersion: 'greeting-a', hasExactState: true, targetStateHash: true, source: { floor: 5, selected: 0, sourceHash: true, stateHash: true, roots: 1, variables: 1 } },
     { floor: 8, selected: 1, turn: 2, textVersion: 'v2', hasExactState: false, targetStateHash: false, source: { floor: 8, selected: 1, sourceHash: true, stateHash: true, roots: 1, variables: 1 } },
   ]);
-  assert.equal(plan.engine.variables.数据.金币, 3);
+  assert.equal(Object.hasOwn(plan, 'engine'), false);
+  assert.deepEqual(plan.final, plan.report.at(-1).source);
   assert.deepEqual(plan.report.map(row => row.source.stateHash), plan.report.map(row => row.source.stateHash).filter(Boolean));
   for (const bad of [
     { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 9, selected: 0, records: [{ v: 1, entries: [] }] }] }) },

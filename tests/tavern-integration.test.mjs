@@ -119,6 +119,8 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
   assert.equal(mapping.report[0].source.sourceHash.length, 64); assert.equal(mapping.report[0].source.stateHash.length, 64);
   assert.equal(mapping.report[0].targetStateHash.length, 64);
   assert.equal(mapping.writable, false);
+  assert.equal(Object.hasOwn(mapping, 'engine'), false);
+  assert.equal(mapping.final.stateHash.length, 64);
   assert.equal(Object.hasOwn(mapping, 'token'), false);
   assert.deepEqual(await api.exportGame('synthetic-fork'), forkBefore);
   const numericMigration = JSON.stringify({
