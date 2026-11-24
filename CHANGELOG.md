@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.50
+
+- Retain host-agnostic batch coordinator in the runtime package with explicit trust-boundary documentation. It remains unreferenced by the plugin entry point; no batch write RPC, persistent plan store, or cross-instance CAS is enabled.
+
 ## 0.1.0-beta.49
 
 - Harden the unconnected batch history coordinator prototype: validate immutable plan digests, require exact continuous receipts, recheck preimages and source text before writes, and stop after uncertain acknowledgements with confirmed-prefix diagnostics. Explicit resume avoids repeating confirmed writes. No batch RPC is registered.

@@ -94,6 +94,26 @@ test('batch uses production record adapter, preserves memory and resumes JSON-pe
   await service.dispose(); await records.dispose();
 });
 
+test('sparse target writes a new exact state row while inherited memory remains readable', async t => {
+  const f = await fixture(t), plan = await planFor(f);
+  const records = createRecordStore(f.tavern);
+  await records.withLock('synthetic-game', () => executeHistoryWritePlan([plan[0]], callbacks(f, records)));
+  const rows = await f.load(); delete rows[2]; await writeFile(f.path, JSON.stringify(rows));
+  const step = plan[1];
+  step.beforeDigest = null; step.data.memory = null; step.outputDigest = hash(step.data);
+  const callbacksForSparse = callbacks(f, records);
+  assert.equal((await records.memoryAt('synthetic-game', 2)).turn, 1);
+  await records.withLock('synthetic-game', () => executeHistoryWritePlan([step], callbacksForSparse));
+  const exactRow = (await f.load())[2];
+  assert.equal(exactRow.turn, 2); assert.equal(exactRow.data.memory, null);
+  assert.equal((await records.memoryAt('synthetic-game', 2)).turn, 1);
+  assert.equal((await records.stateAt('synthetic-game', 2)).turn, 2);
+  const service = createStateService(records.stateApi, { withLock: records.withLock });
+  assert.equal((await service.readEngine('synthetic-game', 2)).variables.数据.金币, 2);
+  await service.dispose();
+  await records.dispose();
+});
+
 test('changed memory preimage after preview blocks all writes through record adapter', async t => {
   const f = await fixture(t), plan = await planFor(f);
   const records = createRecordStore(f.tavern);
