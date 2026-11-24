@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.49';
+export const VERSION = '0.1.0-beta.50';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
