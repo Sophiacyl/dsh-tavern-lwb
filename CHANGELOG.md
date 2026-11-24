@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.46
+
+- Require a one-to-one mapping for every source swipe floor in read-only history planning. Validate selected records before reading them and reject unselected or unmapped source floors.
+
 ## 0.1.0-beta.45
 
 - Add per-source-floor read-only state summaries to history target planning: source digest, replay state digest, root count and variable count. Full snapshots remain local to the preview and no write token is issued.

@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.45';
+export const VERSION = '0.1.0-beta.46';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -251,17 +251,20 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         const engine = parseStateBackup(text, { onSelection: rows => { selected = rows; } });
         const envelope = JSON.parse(text);
         if (envelope.spec !== 'dsh-tavern-lwb/upstream-swipes' || !Array.isArray(envelope.floors)) fail('LWB_MIGRATION', '只读目标规划目前只接受显式swipe楼层封装。');
+        if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
+        if (envelope.floors.length !== mapping.length) fail('LWB_MIGRATION', '来源封装不得包含未映射楼层。');
         const sourceStates = [];
         for (let index = 0; index < mapping.length; index++) {
           const chosen = selected[index];
+          const floor = envelope.floors[index];
+          if (!floor || !Array.isArray(floor.records) || chosen.selected < 0 || chosen.selected >= floor.records.length || !floor.records[chosen.selected]) fail('LWB_MIGRATION', '来源选中记录缺失。');
           const prefix = { ...envelope, floors: envelope.floors.slice(0, index + 1) };
           const stepEngine = parseStateBackup(JSON.stringify(prefix));
           sourceStates.push({ floor: mapping[index].floor, selected: chosen.selected,
-            sourceHash: digest(JSON.stringify(envelope.floors[index].records[chosen.selected])),
+            sourceHash: digest(JSON.stringify(floor.records[chosen.selected])),
             stateHash: digest(JSON.stringify(stepEngine)), roots: stepEngine.roots.length,
             variables: Object.keys(stepEngine.variables).length });
         }
-        if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
         const rows = [];
         for (const [index, target] of mapping.entries()) {
           const material = await tavern.getTurn({ gameId, turn: target.turn }); live();

@@ -274,6 +274,10 @@ test('history target plan distinguishes exact state from fallback and cannot be 
     { floor: 8, selected: 1, turn: 2, textVersion: 'v2', hasExactState: false, targetStateHash: false, source: { floor: 8, selected: 1, sourceHash: true, stateHash: true, roots: 1, variables: 1 } },
   ]);
   assert.equal(plan.engine.variables.数据.金币, 3);
+  for (const bad of [
+    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 9, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
+    { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 1, records: [null] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
+  ]) assert.rejects(f.service.migrationPreview(bad), { code: 'LWB_MIGRATION' });
   await assert.rejects(f.service.migrationCommit({ ...args, token: plan.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
   for (const bad of [[targets[1], targets[0]], targets.slice(1), [targets[0], { ...targets[1], floor: 9 }], [targets[0], { ...targets[1], turn: 1 }]]) {
     await assert.rejects(f.service.migrationPreview({ ...args, targets: bad }), { code: 'LWB_MIGRATION' });
