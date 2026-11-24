@@ -73,6 +73,74 @@ test('batch coordinator stops after a write cannot be confirmed', async () => {
   assert.deepEqual(writes, [1]);
 });
 
+function batchFixture() {
+  const plan = [1, 2, 3].map(turn => ({ turn, textVersion: `v${turn}`, rawText: `body-${turn}`, sourceDigest: fingerprint(`body-${turn}`), data: { plan: 'batch-a', n: turn }, outputDigest: fingerprint({ plan: 'batch-a', n: turn }), beforeDigest: null }));
+  const materials = new Map(plan.map(step => [step.turn, { turn: step.turn, textVersion: step.textVersion, rawText: step.rawText }]));
+  const rows = new Map(), writes = [];
+  const put = step => rows.set(step.turn, { turn: step.turn, textVersion: step.textVersion, data: structuredClone(step.data) });
+  const callbacks = { readMaterial: async turn => materials.get(turn), readRow: async turn => structuredClone(rows.get(turn) ?? null),
+    writeRow: async (turn, textVersion, data) => { writes.push(turn); rows.set(turn, { turn, textVersion, data }); } };
+  return { plan, materials, rows, writes, put, callbacks };
+}
+
+test('batch coordinator rejects non-prefix receipts and deleted preimages before writing', async () => {
+  const f = batchFixture(); f.put(f.plan[1]);
+  await assert.rejects(executeHistoryWritePlan(f.plan, f.callbacks), { code: 'LWB_CONFLICT' });
+  assert.deepEqual(f.writes, []);
+  f.rows.clear(); f.plan[0].beforeDigest = fingerprint({ memory: { revision: 1 } });
+  await assert.rejects(executeHistoryWritePlan(f.plan, f.callbacks), { code: 'LWB_CONFLICT' });
+  assert.deepEqual(f.writes, []);
+});
+
+test('batch coordinator rechecks material and preimage after preflight', async () => {
+  for (const change of ['material', 'row']) {
+    const f = batchFixture(); let reads = 0;
+    const original = f.callbacks.readMaterial;
+    f.callbacks.readMaterial = async turn => {
+      if (++reads === 4) {
+        if (change === 'material') f.materials.get(1).rawText = 'edited';
+        else f.rows.set(1, { turn: 1, textVersion: 'v1', data: { foreign: true } });
+      }
+      return original(turn);
+    };
+    await assert.rejects(executeHistoryWritePlan(f.plan, f.callbacks), { code: change === 'material' ? 'LWB_STALE' : 'LWB_CONFLICT' });
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('batch coordinator confirms lost acknowledgement and stops until explicit resume', async () => {
+  const f = batchFixture(); const write = f.callbacks.writeRow;
+  f.callbacks.writeRow = async (...args) => { await write(...args); throw Error('reply lost after commit'); };
+  await assert.rejects(executeHistoryWritePlan(f.plan, f.callbacks), { code: 'LWB_BATCH_INTERRUPTED', completed: 1, confirmed: true, turn: 1 });
+  assert.deepEqual(f.writes, [1]);
+  f.callbacks.writeRow = write;
+  assert.deepEqual(await executeHistoryWritePlan(f.plan, f.callbacks), { completed: 3, total: 3, status: 'committed' });
+  assert.deepEqual(f.writes, [1, 2, 3]);
+});
+
+test('batch coordinator stops on unconfirmed failure, changed prefix and cancellation', async () => {
+  const f = batchFixture(); f.callbacks.writeRow = async turn => { f.writes.push(turn); throw Error('write failed'); };
+  await assert.rejects(executeHistoryWritePlan(f.plan, f.callbacks), { code: 'LWB_BATCH_INTERRUPTED', completed: 0, confirmed: false });
+  assert.deepEqual(f.writes, [1]);
+  const g = batchFixture(); const write = g.callbacks.writeRow;
+  g.callbacks.writeRow = async (...args) => { await write(...args); if (args[0] === 2) g.rows.get(1).data = { foreign: true }; };
+  await assert.rejects(executeHistoryWritePlan(g.plan, g.callbacks), { code: 'LWB_CONFLICT', completed: 2 });
+  assert.deepEqual(g.writes, [1, 2]);
+  const h = batchFixture(), controller = new AbortController();
+  h.callbacks.writeRow = async (turn, textVersion, data) => { h.writes.push(turn); h.rows.set(turn, { turn, textVersion, data }); controller.abort(); };
+  await assert.rejects(executeHistoryWritePlan(h.plan, { ...h.callbacks, signal: controller.signal }), { name: 'AbortError' });
+  assert.deepEqual(h.writes, [1]);
+});
+
+test('batch coordinator rejects malformed plans without invoking callbacks', async () => {
+  const f = batchFixture(); let calls = 0;
+  const callbacks = { readMaterial: () => { calls++; }, readRow: () => { calls++; }, writeRow: () => { calls++; } };
+  for (const plan of [[null], [f.plan[1], f.plan[0]], [{ ...f.plan[0], outputDigest: 'bad' }], [{ ...f.plan[0], data: null }], [{ ...f.plan[0], beforeDigest: undefined }], [{ ...f.plan[0], data: { changed: true } }]]) {
+    await assert.rejects(executeHistoryWritePlan(plan, callbacks), { code: 'LWB_BATCH_PLAN' });
+  }
+  assert.equal(calls, 0);
+});
+
 test('history resume recognizes a write whose acknowledgement was lost, not a fallback row', () => {
   const f = fixture();
   assert.throws(() => f.write(f.plan[0], { lostReply: true }), /after commit/);

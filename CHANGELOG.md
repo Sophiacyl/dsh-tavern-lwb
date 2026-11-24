@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.49
+
+- Harden the unconnected batch history coordinator prototype: validate immutable plan digests, require exact continuous receipts, recheck preimages and source text before writes, and stop after uncertain acknowledgements with confirmed-prefix diagnostics. Explicit resume avoids repeating confirmed writes. No batch RPC is registered.
+
 ## 0.1.0-beta.48
 
 - Extend read-only history target planning to dense explicit upstream WAL source records as well as swipe mappings. Keep each record mapped to an existing turn and current text version; reject null/missing WAL records; do not enable backfill writes.

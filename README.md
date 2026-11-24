@@ -1,6 +1,6 @@
 # LWB Bridge for DSH Tavern
 
-**公开测试版候选 `0.1.0-beta.48`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
+**公开测试版候选 `0.1.0-beta.49`**。面向 [flizzywine/dsh-tavern](https://github.com/flizzywine/dsh-tavern) 插件 API 7／8 的第三方状态与记忆扩展：受限 State2、便携记忆包预览导入导出、手动总结候选和三个只读宏模板。
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
