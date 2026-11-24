@@ -279,12 +279,18 @@ test('history target plan distinguishes exact state from fallback and cannot be 
   for (const bad of [
     { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }, { floor: 9, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
     { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 5, selected: 1, records: [null] }, { floor: 8, selected: 0, records: [{ v: 1, entries: [] }] }] }) },
-  ]) assert.rejects(f.service.migrationPreview(bad), { code: 'LWB_MIGRATION' });
+  ]) await assert.rejects(f.service.migrationPreview(bad), { code: 'LWB_MIGRATION' });
+  assert.deepEqual(f.documents, before, 'invalid source envelope cannot write state');
   await assert.rejects(f.service.migrationCommit({ ...args, token: plan.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
   for (const bad of [[targets[1], targets[0]], targets.slice(1), [targets[0], { ...targets[1], floor: 9 }], [targets[0], { ...targets[1], turn: 1 }]]) {
     await assert.rejects(f.service.migrationPreview({ ...args, targets: bad }), { code: 'LWB_MIGRATION' });
   }
   await assert.rejects(f.service.migrationPreview({ ...args, targets: [targets[0], { ...targets[1], textVersion: 'hidden' }] }), { code: 'LWB_STALE' });
+  const outOfOrder = { ...args, text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [
+    { floor: 5, selected: 0, records: [{ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 3 }, source: 'text' }] }] }] },
+    { floor: 8, selected: 1, records: [null, { v: 1, entries: [] }] },
+  ] }), targets: [{ floor: 5, turn: 2, textVersion: 'v2' }, { floor: 8, turn: 1, textVersion: 'greeting-a' }] };
+  await assert.rejects(f.service.migrationPreview(outOfOrder), { code: 'LWB_MIGRATION' });
   f.game('a').versions.delete(1);
   await assert.rejects(f.service.migrationPreview(args), { code: 'LWB_STALE' });
   assert.deepEqual(f.documents, before);
