@@ -4,7 +4,7 @@
 
 **Based on LittleWhiteBox by biex** — 原项目 **[LittleWhiteBox（小白X）](https://github.com/RT15548/LittleWhiteBox)**。本项目是其部分数据层的公开修改适配，产品名称为 **LWB Bridge**，并非原作者或 Tavern 官方发布。包 ID 保留 `dsh-tavern-lwb` 以兼容已安装用户的数据。
 
-beta.59 的已验收范围、保留协议缺口和实机待验项见 [兼容矩阵](COMPATIBILITY.md)。
+beta.59 的已验收范围、保留协议缺口和实机待验项见 [兼容矩阵](https://github.com/Sophiacyl/dsh-tavern-lwb/blob/main/COMPATIBILITY.md)。
 
 ## 安装
 
