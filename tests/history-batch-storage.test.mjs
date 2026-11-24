@@ -8,6 +8,8 @@ import { createRecordStore } from '../host/records.mjs';
 import { createStateService } from '../host/service.mjs';
 import { executeHistoryWritePlan, historyPlanDigest as hash } from '../core/history-batch.mjs';
 import { applyText, emptyEngine } from '../core/index.mjs';
+import { buildHistoryWritePlan } from '../host/history-plan-builder.mjs';
+import { createHistoryPlanStore } from '../host/history-plan-store.mjs';
 
 const materials = [1, 2, 3].map(turn => ({ turn, textVersion: `synthetic-v${turn}`, rawText: `synthetic-body-${turn}` }));
 const envelopeSpec = 'dsh-tavern-lwb/record';
@@ -143,6 +145,27 @@ test('target version switch after prefix write stops and preserves written prefi
   assert.deepEqual(f.writes, [1]);
   materials[1].textVersion = 'synthetic-v2';
   await records.dispose();
+});
+
+test('source WAL builds a persisted executable plan with production-readable lineage', async t => {
+  const f = await fixture(t), records = createRecordStore(f.tavern);
+  const text = JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-wal', version: 1, records: [1, 2, 3].map(n => ({ v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: n * 10 }, source: 'text' }] }] })) });
+  const inputs = { gameId: 'synthetic-game', text, planId: 'synthetic-builder-plan', now: () => 1,
+    targets: materials.map((row, floor) => ({ floor, turn: row.turn, textVersion: row.textVersion })),
+    readMaterial: callbacks(f, records).readMaterial, readRow: callbacks(f, records).readRow };
+  const before = await f.load();
+  const plan = await records.withLock('synthetic-game', () => buildHistoryWritePlan(inputs));
+  assert.deepEqual(await f.load(), before, 'builder is read-only');
+  let gameData = { enabled: true };
+  const deps = { readGameData: async () => structuredClone(gameData), saveGameData: async ({ data }) => { gameData = structuredClone(data); }, withLock: records.withLock, now: () => 1 };
+  const saved = await createHistoryPlanStore(deps).save({ gameId: inputs.gameId, turn: 3, textVersion: materials[2].textVersion, steps: plan });
+  const restored = await createHistoryPlanStore(deps).load({ gameId: inputs.gameId, token: saved.token, turn: 3, textVersion: materials[2].textVersion });
+  await records.withLock(inputs.gameId, () => executeHistoryWritePlan(restored.steps, callbacks(f, records)));
+  const service = createStateService(records.stateApi, { withLock: records.withLock });
+  assert.equal((await service.readEngine(inputs.gameId, 3)).variables.数据.金币, 30);
+  for (const row of Object.values(await f.load())) assert.equal(row.data.memory.revision, row.turn);
+  await assert.rejects(buildHistoryWritePlan({ ...inputs, targets: [...inputs.targets].reverse() }), { code: 'LWB_BATCH_PLAN' });
+  await service.dispose(); await records.dispose();
 });
 
 test('changed memory preimage after preview blocks all writes through record adapter', async t => {

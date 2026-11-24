@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.53
+
+- Add an internal WAL/swipe-to-write-plan builder with explicit targets, memory-preserving envelopes, parent-linked states, source/preimage/output digests and bounded plan sizes. Synthetic integration now exercises builder → persisted reload → coordinator → production record adapter. Public batch confirmation remains unregistered.
+
 ## 0.1.0-beta.52
 
 - Add an internal, unconnected batch plan store with game/turn/version binding, 15-minute expiry, detached reload, digest checks and token-specific cleanup. Preserve unrelated game settings and refuse replacement of an outstanding plan. No public batch RPC is registered.
