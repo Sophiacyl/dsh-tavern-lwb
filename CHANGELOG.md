@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.45
+
+- Add per-source-floor read-only state summaries to history target planning: source digest, replay state digest, root count and variable count. Full snapshots remain local to the preview and no write token is issued.
+
 ## 0.1.0-beta.44
 
 - Add read-only history target mapping via migration-preview. Check explicit source floors against existing target turns and their current text versions without issuing a write token.

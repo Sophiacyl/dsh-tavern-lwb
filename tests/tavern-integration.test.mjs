@@ -113,7 +113,11 @@ for (const [label, apiVersion] of targets) test('real ' + label + ': registratio
     text: JSON.stringify({ spec: 'dsh-tavern-lwb/upstream-swipes', version: 1, floors: [{ floor: 9, selected: 1, records: [null, { v: 1, entries: [{ kind: 'call', roots: ['数据'], ops: [{ op: 'set', path: '数据', value: { 金币: 2 }, source: 'text' }] }] }] }] }),
     targets: [{ floor: 9, turn: 1, textVersion: 'fork-greeting' }],
   });
-  assert.deepEqual(mapping.report, [{ floor: 9, selected: 1, turn: 1, textVersion: 'fork-greeting', hasExactState: true }]);
+  assert.equal(mapping.report.length, 1);
+  assert.deepEqual(Object.keys(mapping.report[0]).sort(), ['floor', 'hasExactState', 'selected', 'source', 'targetStateHash', 'textVersion', 'turn']);
+  assert.equal(mapping.report[0].source.floor, 9); assert.equal(mapping.report[0].source.selected, 1);
+  assert.equal(mapping.report[0].source.sourceHash.length, 64); assert.equal(mapping.report[0].source.stateHash.length, 64);
+  assert.equal(mapping.report[0].targetStateHash.length, 64);
   assert.equal(mapping.writable, false);
   assert.equal(Object.hasOwn(mapping, 'token'), false);
   assert.deepEqual(await api.exportGame('synthetic-fork'), forkBefore);

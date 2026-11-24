@@ -268,7 +268,11 @@ test('history target plan distinguishes exact state from fallback and cannot be 
   const plan = await f.service.migrationPreview(args);
   assert.equal(plan.writable, false);
   assert.equal(Object.hasOwn(plan, 'token'), false);
-  assert.deepEqual(plan.report, [{ ...targets[0], selected: 0, hasExactState: true }, { ...targets[1], selected: 1, hasExactState: false }]);
+  assert.deepEqual(plan.report.map(({ floor, selected, turn, textVersion, hasExactState, targetStateHash, source }) => ({ floor, selected, turn, textVersion, hasExactState,
+    targetStateHash: Boolean(targetStateHash), source: { floor: source.floor, selected: source.selected, sourceHash: source.sourceHash.length === 64, stateHash: source.stateHash.length === 64, roots: source.roots, variables: source.variables } })), [
+    { floor: 5, selected: 0, turn: 1, textVersion: 'greeting-a', hasExactState: true, targetStateHash: true, source: { floor: 5, selected: 0, sourceHash: true, stateHash: true, roots: 1, variables: 1 } },
+    { floor: 8, selected: 1, turn: 2, textVersion: 'v2', hasExactState: false, targetStateHash: false, source: { floor: 8, selected: 1, sourceHash: true, stateHash: true, roots: 1, variables: 1 } },
+  ]);
   assert.equal(plan.engine.variables.数据.金币, 3);
   await assert.rejects(f.service.migrationCommit({ ...args, token: plan.token, confirmReplace: true }), { code: 'LWB_MIGRATION' });
   for (const bad of [[targets[1], targets[0]], targets.slice(1), [targets[0], { ...targets[1], floor: 9 }], [targets[0], { ...targets[1], turn: 1 }]]) {

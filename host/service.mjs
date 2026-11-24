@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseStateBackup, replayStateHistory } from '../core/migration.mjs';
 import { applyText, emptyEngine, LIMITS as ENGINE_LIMITS } from '../core/index.mjs';
-export const VERSION = '0.1.0-beta.44';
+export const VERSION = '0.1.0-beta.45';
 export const RECORD_SPEC = 'dsh-tavern-lwb/state';
 const SETTINGS_SPEC = 'dsh-tavern-lwb/settings';
 const MAX_RECORD_BYTES = 60 * 1024;
@@ -249,6 +249,18 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
         });
         let selected = [];
         const engine = parseStateBackup(text, { onSelection: rows => { selected = rows; } });
+        const envelope = JSON.parse(text);
+        if (envelope.spec !== 'dsh-tavern-lwb/upstream-swipes' || !Array.isArray(envelope.floors)) fail('LWB_MIGRATION', '只读目标规划目前只接受显式swipe楼层封装。');
+        const sourceStates = [];
+        for (let index = 0; index < mapping.length; index++) {
+          const chosen = selected[index];
+          const prefix = { ...envelope, floors: envelope.floors.slice(0, index + 1) };
+          const stepEngine = parseStateBackup(JSON.stringify(prefix));
+          sourceStates.push({ floor: mapping[index].floor, selected: chosen.selected,
+            sourceHash: digest(JSON.stringify(envelope.floors[index].records[chosen.selected])),
+            stateHash: digest(JSON.stringify(stepEngine)), roots: stepEngine.roots.length,
+            variables: Object.keys(stepEngine.variables).length });
+        }
         if (selected.length !== mapping.length || selected.some((row, index) => row.floor !== mapping[index].floor)) fail('LWB_MIGRATION', '目标映射须逐项对应显式来源楼层，不猜测省略轮。');
         const rows = [];
         for (const [index, target] of mapping.entries()) {
@@ -256,7 +268,9 @@ export function createStateService(tavern, { now = () => Date.now(), withLock = 
           if (!material || material.turn !== target.turn || material.textVersion !== target.textVersion || typeof material.rawText !== 'string') fail('LWB_STALE', '目标正文不存在或版本已变化，请重新规划。');
           const row = await tavern.readTurnData({ gameId, turn: target.turn }); live();
           if (row && (row.turn > target.turn || (row.turn === target.turn && row.textVersion !== target.textVersion))) fail('LWB_STALE', '目标状态记录与当前正文不一致。');
-          rows.push({ ...target, selected: selected[index].selected, hasExactState: row?.turn === target.turn });
+          rows.push({ ...target, selected: selected[index].selected, hasExactState: row?.turn === target.turn,
+            targetStateHash: row?.turn === target.turn ? digest(JSON.stringify(row)) : null,
+            source: sourceStates[index] });
         }
         const fresh = await current(gameId, expectedTextVersion);
         if (fresh.turn !== state.turn) fail('LWB_STALE', '规划期间当前轮已变化。');
