@@ -10,8 +10,14 @@ export function createHistoryBatchService(tavern, records, { now = Date.now } = 
   const live = () => { if (disposed) fail('LWB_UNLOADED', '批量服务已停止。'); };
   // Every public operation owns records.withLock. Store calls run inside that
   // lock, so do not recursively acquire the non-reentrant queue.
-  const plans = createHistoryPlanStore({ readGameData: args => tavern.readGameData(args),
-    saveGameData: args => tavern.saveGameData(args), withLock: (_id, work) => work(), now });
+  async function readLive(method, args) {
+    live();
+    const result = await tavern[method](args);
+    live(); return result;
+  }
+  const plans = createHistoryPlanStore({ readGameData: args => readLive('readGameData', args),
+    saveGameData: async args => { live(); await tavern.saveGameData(args); live(); },
+    withLock: (_id, work) => work(), now });
   async function current(gameId, expectedTextVersion, turn) {
     live();
     const state = await tavern.getTurnState({ gameId }); live();
@@ -26,7 +32,7 @@ export function createHistoryBatchService(tavern, records, { now = Date.now } = 
       return records.withLock(gameId, async () => {
         const state = await current(gameId, expectedTextVersion);
         const steps = await buildHistoryWritePlan({ gameId, text, targets, planId: randomUUID(), now,
-          readMaterial: turn => tavern.getTurn({ gameId, turn }), readRow: turn => tavern.readTurnData({ gameId, turn }) });
+          readMaterial: turn => readLive('getTurn', { gameId, turn }), readRow: turn => readLive('readTurnData', { gameId, turn }) });
         if (steps.some(step => step.turn > state.turn)) fail('LWB_BATCH_PLAN', '目标不能晚于当前轮。');
         await current(gameId, expectedTextVersion, state.turn);
         const saved = await plans.save({ gameId, turn: state.turn, textVersion: state.textVersion, steps });
@@ -41,8 +47,8 @@ export function createHistoryBatchService(tavern, records, { now = Date.now } = 
         const plan = await plans.load({ gameId, token, turn: state.turn, textVersion: state.textVersion });
         const guard = () => current(gameId, expectedTextVersion, state.turn);
         const result = await executeHistoryWritePlan(plan.steps, { signal,
-          readMaterial: async turn => { await guard(); return tavern.getTurn({ gameId, turn }); },
-          readRow: async turn => { await guard(); return tavern.readTurnData({ gameId, turn }); },
+          readMaterial: async turn => { await guard(); return readLive('getTurn', { gameId, turn }); },
+          readRow: async turn => { await guard(); return readLive('readTurnData', { gameId, turn }); },
           writeRow: async (turn, textVersion, data) => {
             await guard();
             await records.stateApi.saveTurnData({ gameId, turn, textVersion, data: data.state });

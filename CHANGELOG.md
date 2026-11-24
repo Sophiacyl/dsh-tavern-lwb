@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.55
+
+- Check internal batch service liveness after asynchronous host reads and before plan persistence. Disposal during prepare does not persist a plan; disposal during commit retains the plan without beginning target writes. Public batch RPC remains unregistered.
+
 ## 0.1.0-beta.54
 
 - Connect plan building, persistence and execution in an internal host service with prepare/commit/discard, explicit confirmation and one per-game lock. Preserve plans after uncertain writes for instance-recreated resume. Public RPC registration remains disabled.
