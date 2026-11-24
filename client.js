@@ -1,6 +1,6 @@
 // LWB Bridge — Based on LittleWhiteBox by biex (LittleWhiteBox / 小白X).
 // Original: https://github.com/RT15548/LittleWhiteBox ; derivative terms: LICENSE.md.
-// dsh-tavern-lwb 0.1.0-beta.57 — native Tavern Web UI, public API 7/8.
+// dsh-tavern-lwb 0.1.0-beta.58 — native Tavern Web UI, public API 7/8.
 // This client only requests explicit host actions; it never evaluates state text.
 window.__ModuleLoader__.load({
   id: 'dsh-tavern-lwb',
@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NAME = 'dsh-tavern-lwb'
-    const VERSION = '0.1.0-beta.57'
+    const VERSION = '0.1.0-beta.58'
     const SAMPLE = '<state>\n$schema 数据\n  角色:\n    生命值: 0\n    金币: 0\n\n数据:\n  角色:\n    生命值: 100\n    金币: 0\n</state>'
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
     const json = value => {
@@ -40,6 +40,51 @@ window.__ModuleLoader__.load({
         ['errors', 'corrections', 'changes'].map(key => h('div', { key },
           h('strong', { style: { fontSize: 12 } }, { errors: '错误', corrections: '修正', changes: '变更' }[key]),
           h('pre', { style: styles.pre }, json(value[key] == null ? [] : value[key])))))
+    }
+
+    function HistoryBatchPanel({ ui, gameId, snapshot, onSaved }) {
+      const [source, setSource] = React.useState(''), [mapping, setMapping] = React.useState('[]')
+      const [plan, setPlan] = React.useState(null), [busy, setBusy] = React.useState(false), [error, setError] = React.useState('')
+      const epoch = React.useRef(0)
+      React.useEffect(() => { epoch.current++; setPlan(null); setBusy(false); setError(''); return () => { epoch.current++ } }, [gameId, snapshot?.turn, snapshot?.textVersion])
+      const allowed = !!snapshot?.enabled && !snapshot?.busy && !!snapshot?.textVersion && !busy
+      const matches = plan && plan.turn === snapshot?.turn && plan.textVersion === snapshot?.textVersion && !plan.expired
+      async function act(action) {
+        if (busy || (action !== 'inspect' && action !== 'discard' && !allowed)) return
+        if (action === 'commit' && (!matches || !window.confirm('确认逐轮替换这些历史轮的插件状态？同轮记忆保留；中断时已写前缀不会回滚。请先备份，勿同时运行另一实例。'))) return
+        if (action === 'discard' && (!plan || !window.confirm('清除这个回填计划？已写入的历史状态不会撤销。'))) return
+        const ticket = ++epoch.current
+        setBusy(true); setError('')
+        try {
+          let payload = { gameId, expectedTextVersion: snapshot?.textVersion }
+          if (action === 'prepare') payload = { ...payload, text: source, targets: JSON.parse(mapping) }
+          if (action === 'commit' || action === 'discard') payload = { ...payload, token: plan.token, ...(action === 'commit' ? { confirmReplace: true } : {}) }
+          await ui.callHost(NAME + '/history-batch-' + action, payload)
+          if (ticket !== epoch.current) return
+          const restored = await ui.callHost(NAME + '/history-batch-inspect', { gameId })
+          if (ticket === epoch.current) { setPlan(restored); if (action === 'commit') onSaved() }
+        } catch (e) {
+          if (ticket === epoch.current) {
+            setError(errorText(e))
+            // An interrupted write can still have committed its prefix. Reload
+            // metadata only; never automatically submit it a second time.
+            try { const restored = await ui.callHost(NAME + '/history-batch-inspect', { gameId }); if (ticket === epoch.current) setPlan(restored) } catch { /* retain explicit error */ }
+          }
+        } finally { if (ticket === epoch.current) setBusy(false) }
+      }
+      return h('details', { style: styles.box }, h('summary', null, '批量历史状态回填'),
+        h('p', { style: styles.muted }, '先备份。仅写已有轮当前版本的插件状态，不改原生正文。计划保存15分钟；中断保留已写前缀，续跑仍须明确确认。'),
+        error ? h('p', { role: 'alert' }, error) : null,
+        h('label', null, '批量来源JSON', h('textarea', { 'aria-label': '批量来源JSON', style: styles.textarea, value: source, disabled: busy, onChange: e => setSource(e.target.value) })),
+        h('label', null, '目标映射JSON', h('textarea', { 'aria-label': '目标映射JSON', style: styles.textarea, value: mapping, disabled: busy, onChange: e => setMapping(e.target.value) })),
+        h('p', { style: styles.muted }, '映射格式：[{"floor":0,"turn":1,"textVersion":"目标当前版本"}]；WAL floor从0计数。'),
+        h('button', { style: styles.button, disabled: !allowed || !!plan || !source.trim(), onClick: () => act('prepare') }, '准备并保存回填计划'),
+        h('button', { style: styles.button, disabled: busy, onClick: () => act('inspect') }, '查看或恢复回填计划'),
+        plan ? h('div', null,
+          h('pre', { style: styles.pre }, json({ turn: plan.turn, textVersion: plan.textVersion, expired: plan.expired, targets: plan.targets })),
+          !matches ? h('p', { role: 'status' }, '计划已过期或当前轮次版本不匹配；请核对后清除并重新准备。') : null,
+          h('button', { style: styles.button, disabled: !allowed || !matches, onClick: () => act('commit') }, '确认执行或续跑回填'),
+          h('button', { style: styles.button, disabled: busy, onClick: () => act('discard') }, '清除回填计划（不撤销已写入）')) : null)
     }
 
     function MigrationPanel({ ui, gameId, snapshot, onSaved }) {
@@ -357,6 +402,7 @@ window.__ModuleLoader__.load({
           h('p', { style: styles.muted }, '用于安装或开启插件前，当前回复已经存在的 <state> 块。仅处理当前已结算的正文版本，由你主动触发。'),
           button('处理当前回复', processCurrent, busy || !snapshot || !snapshot.enabled || !state || !settled(state, snapshot))),
         h(MigrationPanel, { key: gameId, ui, gameId, snapshot, onSaved: () => session.current?.refresh() }),
+        h(HistoryBatchPanel, { key: 'batch-' + gameId, ui, gameId, snapshot, onSaved: () => session.current?.refresh() }),
         h('details', { style: styles.box },
           h('summary', null, '验证版支持边界与宿主限制'),
           h('p', { style: styles.muted }, '本面板只显示 record.engine.variables；状态解析、规则检查、去重及版本写入由配套宿主负责。仅支持宿主已实现的 State2 子集；不执行 taskjs、JavaScript、旧版 plot-log 或旧酒馆脚本 API。受控State2历史可用上面的迁移面板预览；完整WAL、swipe和旧脚本迁移尚不支持。'),

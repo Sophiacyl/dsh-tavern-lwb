@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.58
+
+- Add a batch history panel for explicit source/mapping input, plan preparation, metadata recovery, confirmed execution/resume and token-specific discard. Restoring metadata never submits writes; switching games clears the local plan scope.
+
 ## 0.1.0-beta.57
 
 - Add history-batch-inspect to recover a persisted plan's token and target summaries without returning raw text or complete state. Expired plans remain inspectable and require explicit cleanup; inspection does not write or execute.

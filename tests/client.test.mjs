@@ -20,6 +20,42 @@ function load(ui, dom) {
   return definition;
 }
 
+test('batch panel restores metadata without auto-commit, confirms explicitly, and clears scope on game switch', async t => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://example.invalid/' });
+  const old = Object.fromEntries(['window', 'document', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  let panel, confirmed = false;
+  const calls = [], plan = { token: 'synthetic-a', turn: 1, textVersion: 'v1', expired: false, targets: [{ turn: 1, textVersion: 'v1' }] };
+  const ui = { apiVersion: 7, registerPanel(value) { panel = value; },
+    watchTurnState(_id, callback) { callback({ turn: 1, textVersion: 'v1', settled: true, busy: false }); return () => {}; },
+    watchState() { return () => {}; },
+    async callHost(method, args) {
+      calls.push([method, args]);
+      if (method.endsWith('/read')) return { enabled: true, busy: false, turn: 1, textVersion: 'v1', record: { engine: sampleEngine }, limits: {} };
+      if (method.endsWith('/history-batch-inspect')) return args.gameId === 'a' ? plan : null;
+      if (method.endsWith('/history-batch-commit')) return { completed: 1 };
+      throw Error('Unexpected ' + method);
+    } };
+  dom.window.confirm = () => confirmed;
+  load(ui, dom);
+  const root = createRoot(dom.window.document.getElementById('root'));
+  t.after(async () => { await act(() => root.unmount()); dom.window.close(); for (const [key, descriptor] of Object.entries(old)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } });
+  const settle = async () => { for (let i = 0; i < 4; i++) await tick(); };
+  const button = text => [...dom.window.document.querySelectorAll('button')].find(node => node.textContent === text);
+  await act(async () => { root.render(panel.render({ gameId: 'a' })); await settle(); });
+  await act(async () => { button('查看或恢复回填计划').click(); await settle(); });
+  assert.ok(button('确认执行或续跑回填'));
+  assert.equal(calls.filter(([method]) => method.endsWith('/history-batch-commit')).length, 0);
+  await act(async () => { button('确认执行或续跑回填').click(); await settle(); });
+  assert.equal(calls.filter(([method]) => method.endsWith('/history-batch-commit')).length, 0);
+  confirmed = true;
+  await act(async () => { button('确认执行或续跑回填').click(); await settle(); });
+  const commits = calls.filter(([method]) => method.endsWith('/history-batch-commit'));
+  assert.equal(commits.length, 1); assert.equal(commits[0][1].token, 'synthetic-a'); assert.equal(commits[0][1].confirmReplace, true);
+  await act(async () => { root.render(panel.render({ gameId: 'b' })); await settle(); });
+  assert.equal(button('确认执行或续跑回填'), undefined);
+});
+
 test('real React panel enables, previews, confirms initialization; edits invalidate preview; UI text is escaped', async t => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://example.invalid/' });
   const old = Object.fromEntries(['window', 'document', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
